@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Bouldering Competition System</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+body {
+    font-family: Arial, sans-serif;
+    background: #f4f6f8;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+}
+
+.container {
+    background: #ffffff;
+    padding: 40px;
+    border-radius: 10px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+    text-align: center;
+    width: 350px;
+}
+
+h1 {
+    margin-bottom: 30px;
+}
+
+button {
+    width: 100%;
+    padding: 15px;
+    margin: 10px 0;
+    font-size: 16px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: 0.2s ease;
+}
+
+.register-btn {
+    background: #007bff;
+    color: white;
+}
+
+.register-btn:hover {
+    background: #0056b3;
+}
+
+.judge-btn {
+    background: #28a745;
+    color: white;
+}
+
+.judge-btn:hover {
+    background: #1e7e34;
+}
+
+.ranking-btn {
+    background: #ffc107;
+    color: black;
+}
+
+.ranking-btn:hover {
+    background: #d39e00;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+    <h1>Bouldering System</h1>
+
+    <button class="register-btn" onclick="goTo('student_registration.html')">
+        Register Student
+    </button>
+
+    <button class="judge-btn" onclick="goTo('judge_scoring.html')">
+        Judging Panel
+    </button>
+
+    <button class="ranking-btn" onclick="goTo('ranking.html')">
+        Ranking Board
+    </button>
+</div>
+
+<script>
+function goTo(page) {
+    window.location.href = page;
+}
+</script>
+
+</body>
+</html>

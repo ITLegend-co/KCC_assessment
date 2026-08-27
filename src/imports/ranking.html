@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Ranking Board</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+body {
+    font-family: Arial, sans-serif;
+    background: #f4f6f8;
+    padding: 20px;
+}
+.controls { margin-bottom: 15px; }
+table {
+    width: 100%;
+    max-width: 700px;
+    background: #fff;
+    border-collapse: collapse;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+th, td {
+    border: 1px solid #ccc;
+    padding: 8px;
+    text-align: center;
+}
+th { background: #e9ecef; }
+.rank { font-weight: bold; }
+.realtime-on { color: green; font-weight: bold; }
+.realtime-off { color: #888; }
+</style>
+</head>
+
+<body>
+
+<h2>Student Ranking</h2>
+
+<div class="controls">
+<label>Select Round:</label>
+<select id="roundSelect">
+<option value="Qualifier">Qualifier</option>
+<option value="Semi Final">Semi Final</option>
+<option value="Final">Final</option>
+</select>
+
+<label>
+<input type="checkbox" id="realtimeToggle">
+Realtime Update
+</label>
+
+<span id="realtimeStatus" class="realtime-off">OFF</span>
+</div>
+
+<table>
+<thead>
+<tr>
+<th>Rank</th>
+<th>ID</th>
+<th>Name</th>
+<th>T</th>
+<th>Z</th>
+<th>AT</th>
+<th>AZ</th>
+</tr>
+</thead>
+<tbody id="rankingBody"></tbody>
+</table>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<script>
+// Firebase Config
+const firebaseConfig = {
+  apiKey: "AIzaSyAnMXu_iJJIM5xoHYl2bMgsQdHx1IWUaJY",
+  authDomain: "bouldering-4d840.firebaseapp.com",
+  databaseURL: "https://bouldering-4d840-default-rtdb.asia-southeast1.firebasedatabase.app/",
+  projectId: "bouldering-4d840",
+  storageBucket: "bouldering-4d840.firebasestorage.app",
+  messagingSenderId: "457379325638",
+  appId: "1:457379325638:web:a06a8c65c132542f4219c7"
+};
+
+firebase.initializeApp(firebaseConfig);
+const database = firebase.database();
+const scoresRef = database.ref("scores");
+
+// Load students from localStorage
+const students = JSON.parse(localStorage.getItem("students")) || [];
+
+const roundSelect = document.getElementById("roundSelect");
+const rankingBody = document.getElementById("rankingBody");
+const realtimeToggle = document.getElementById("realtimeToggle");
+const realtimeStatus = document.getElementById("realtimeStatus");
+
+let scores = [];
+let realtimeEnabled = false;
+
+// Calculate Ranking
+function calculateRanking(round) {
+
+    const summary = {};
+
+    scores
+        .filter(s => s.round === round)
+        .forEach(s => {
+
+            if (!summary[s.id]) {
+                summary[s.id] = {
+                    id: s.id,
+                    top: 0,
+                    zone: 0,
+                    at: 0,
+                    az: 0
+                };
+            }
+
+            // Count TOP if AT exists
+            if (s.at !== null && s.at !== undefined) {
+                summary[s.id].top += 1;
+                summary[s.id].at += s.at;
+            }
+
+            // Count ZONE if AZ exists
+            if (s.az !== null && s.az !== undefined) {
+                summary[s.id].zone += 1;
+                summary[s.id].az += s.az;
+            }
+        });
+
+    let result = Object.values(summary).map(r => {
+        const student = students.find(s => s.id === r.id);
+        return {
+            ...r,
+            name: student ? student.name : "Unknown"
+        };
+    });
+
+    // IFSC sorting
+    result.sort((a, b) => {
+        if (b.top !== a.top) return b.top - a.top;
+        if (b.zone !== a.zone) return b.zone - a.zone;
+        if (a.at !== b.at) return a.at - b.at;
+        return a.az - b.az;
+    });
+
+    return result;
+}
+
+// Render
+function renderRanking() {
+    const round = roundSelect.value;
+    const ranking = calculateRanking(round);
+
+    rankingBody.innerHTML = "";
+
+    let currentRank = 1;
+
+    ranking.forEach((r, index) => {
+
+        if (index > 0) {
+            const prev = ranking[index - 1];
+            if (
+                r.top !== prev.top ||
+                r.zone !== prev.zone ||
+                r.at !== prev.at ||
+                r.az !== prev.az
+            ) {
+                currentRank = index + 1;
+            }
+        }
+
+        const row = document.createElement("tr");
+        row.innerHTML = `
+            <td class="rank">${currentRank}</td>
+            <td>${r.id}</td>
+            <td>${r.name}</td>
+            <td>${r.top}</td>
+            <td>${r.zone}</td>
+            <td>${r.at}</td>
+            <td>${r.az}</td>
+        `;
+        rankingBody.appendChild(row);
+    });
+}
+
+// Firebase Listener
+function enableRealtime() {
+    realtimeStatus.textContent = "ON";
+    realtimeStatus.className = "realtime-on";
+
+    scoresRef.on("value", snapshot => {
+        scores = [];
+        snapshot.forEach(child => {
+            scores.push(child.val());
+        });
+        renderRanking();
+    });
+}
+
+function disableRealtime() {
+    realtimeStatus.textContent = "OFF";
+    realtimeStatus.className = "realtime-off";
+    scoresRef.off();
+}
+
+// Initial Load (one-time)
+scoresRef.once("value", snapshot => {
+    scores = [];
+    snapshot.forEach(child => {
+        scores.push(child.val());
+    });
+    renderRanking();
+});
+
+// Events
+roundSelect.addEventListener("change", renderRanking);
+
+realtimeToggle.addEventListener("change", () => {
+    if (realtimeToggle.checked) {
+        enableRealtime();
+    } else {
+        disableRealtime();
+    }
+});
+</script>
+
+</body>
+</html>

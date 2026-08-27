@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Judge Scoring Panel</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+body {
+    font-family: Arial, sans-serif;
+    background: #f4f6f8;
+    padding: 20px;
+}
+form, table {
+    background: #fff;
+    padding: 15px;
+    border-radius: 8px;
+    max-width: 600px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+}
+label { display:block; margin-top:10px; font-weight:bold; }
+input, select {
+    width:100%;
+    padding:8px;
+    margin-top:5px;
+    box-sizing:border-box;
+}
+button {
+    margin-top:10px;
+    padding:10px;
+    border:none;
+    border-radius:5px;
+    cursor:pointer;
+    font-size:16px;
+}
+.fall-btn { background:#dc3545; color:#fff; }
+.zone-btn { background:#ffc107; color:#000; }
+.top-btn { background:#28a745; color:#fff; }
+.save-btn { background:#007bff; color:#fff; width:100%; }
+
+.attempt-display {
+    font-size:18px;
+    font-weight:bold;
+    margin-top:10px;
+}
+
+table {
+    width:100%;
+    border-collapse:collapse;
+}
+th, td {
+    border:1px solid #ccc;
+    padding:8px;
+    text-align:center;
+}
+th { background:#e9ecef; }
+</style>
+</head>
+
+<body>
+
+<h2>Judge Scoring – Student Category</h2>
+
+<form id="scoreForm">
+
+<label>Select Student</label>
+<select id="studentSelect" required></select>
+
+<label>Round</label>
+<select id="round" required>
+<option value="">-- Select Round --</option>
+<option value="Qualifier">Qualifier</option>
+<option value="Semi Final">Semi Final</option>
+<option value="Final">Final</option>
+</select>
+
+<label>Boulder</label>
+<input type="number" id="boulder" min="1" required>
+
+<div class="attempt-display">
+Attempts: <span id="attemptCount">0</span><br>
+AZ: <span id="azDisplay">-</span><br>
+AT: <span id="atDisplay">-</span>
+</div>
+
+<button type="button" class="fall-btn" onclick="recordAttempt('fall')">Fall</button>
+<button type="button" class="zone-btn" onclick="recordAttempt('zone')">Zone</button>
+<button type="button" class="top-btn" onclick="recordAttempt('top')">Top</button>
+
+<button type="submit" class="save-btn">Save Score</button>
+
+</form>
+
+<table id="scoreTable">
+<thead>
+<tr>
+<th>ID</th>
+<th>Name</th>
+<th>Round</th>
+<th>Boulder</th>
+<th>AT</th>
+<th>AZ</th>
+</tr>
+</thead>
+<tbody></tbody>
+</table>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<script>
+// Firebase Config
+const firebaseConfig = {
+  apiKey: "AIzaSyAnMXu_iJJIM5xoHYl2bMgsQdHx1IWUaJY",
+  authDomain: "bouldering-4d840.firebaseapp.com",
+  databaseURL: "https://bouldering-4d840-default-rtdb.asia-southeast1.firebasedatabase.app/",
+  projectId: "bouldering-4d840",
+  storageBucket: "bouldering-4d840.firebasestorage.app",
+  messagingSenderId: "457379325638",
+  appId: "1:457379325638:web:a06a8c65c132542f4219c7"
+};
+
+firebase.initializeApp(firebaseConfig);
+const database = firebase.database();
+const scoresRef = database.ref("scores");
+
+// DOM
+const studentSelect = document.getElementById("studentSelect");
+const scoreTableBody = document.querySelector("#scoreTable tbody");
+const form = document.getElementById("scoreForm");
+
+const attemptCountDisplay = document.getElementById("attemptCount");
+const azDisplay = document.getElementById("azDisplay");
+const atDisplay = document.getElementById("atDisplay");
+
+// Load students
+const students = JSON.parse(localStorage.getItem("students")) || [];
+let scores = [];
+
+students.forEach(s => {
+    const option = document.createElement("option");
+    option.value = s.id;
+    option.textContent = `${s.id} - ${s.name}`;
+    studentSelect.appendChild(option);
+});
+
+// Attempt logic
+let attemptCount = 0;
+let az = null;
+let at = null;
+
+function recordAttempt(type) {
+    attemptCount++;
+
+    if (type === "zone" && az === null) {
+        az = attemptCount;
+    }
+
+    if (type === "top" && at === null) {
+        if (az === null) az = attemptCount;
+        at = attemptCount;
+    }
+
+    updateDisplay();
+}
+
+function updateDisplay() {
+    attemptCountDisplay.textContent = attemptCount;
+    azDisplay.textContent = az ?? "-";
+    atDisplay.textContent = at ?? "-";
+}
+
+function resetAttempts() {
+    attemptCount = 0;
+    az = null;
+    at = null;
+    updateDisplay();
+}
+
+// Render table
+function renderScores() {
+    scoreTableBody.innerHTML = "";
+    scores.forEach(sc => {
+        const student = students.find(s => s.id === sc.id);
+        if (!student) return;
+
+        const row = document.createElement("tr");
+        row.innerHTML = `
+            <td>${student.id}</td>
+            <td>${student.name}</td>
+            <td>${sc.round}</td>
+            <td>${sc.boulder}</td>
+            <td>${sc.at ?? "-"}</td>
+            <td>${sc.az ?? "-"}</td>
+        `;
+        scoreTableBody.appendChild(row);
+    });
+}
+
+// Firebase real-time load
+scoresRef.on("value", snapshot => {
+    scores = [];
+    snapshot.forEach(child => {
+        scores.push({
+            key: child.key,
+            ...child.val()
+        });
+    });
+    localStorage.setItem("scores", JSON.stringify(scores));
+    renderScores();
+});
+
+// Save
+form.addEventListener("submit", function(e) {
+    e.preventDefault();
+
+    const newScore = {
+        id: studentSelect.value,
+        round: document.getElementById("round").value,
+        boulder: Number(document.getElementById("boulder").value),
+        at: at,
+        az: az
+    };
+
+    const existing = scores.find(s =>
+        s.id === newScore.id &&
+        s.round === newScore.round &&
+        s.boulder === newScore.boulder
+    );
+
+    if (existing) {
+        if (!confirm("Score exists. Overwrite?")) return;
+        scoresRef.child(existing.key).update(newScore);
+    } else {
+        scoresRef.push(newScore);
+    }
+
+    form.reset();
+    resetAttempts();
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Student Registration</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        background: #f4f6f8;
+        padding: 20px;
+    }
+    form, table {
+        background: #fff;
+        padding: 15px;
+        border-radius: 8px;
+        max-width: 700px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        margin-bottom: 20px;
+    }
+    label {
+        display: block;
+        margin-top: 10px;
+        font-weight: bold;
+    }
+    input {
+        width: 100%;
+        padding: 8px;
+        margin-top: 5px;
+        box-sizing: border-box;
+    }
+    button {
+        margin-top: 15px;
+        padding: 8px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+    }
+    .save-btn {
+        width: 100%;
+        background: #007bff;
+        color: #fff;
+        font-size: 16px;
+    }
+    .save-btn:hover { background: #0056b3; }
+
+    .edit-btn { background: #ffc107; color: #000; }
+    .delete-btn { background: #dc3545; color: #fff; }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    th, td {
+        border: 1px solid #ccc;
+        padding: 8px;
+        text-align: center;
+    }
+    th { background: #e9ecef; }
+</style>
+</head>
+
+<body>
+
+<h2>Student Contestant Registration</h2>
+
+<form id="studentForm">
+    <input type="hidden" id="editKey">
+
+    <label>Name</label>
+    <input type="text" id="name" required>
+
+    <label>School</label>
+    <input type="text" id="school" required>
+
+    <label>Class</label>
+    <input type="text" id="class" required>
+
+    <label>Age</label>
+    <input type="number" id="age" min="5" max="25" required>
+
+    <button type="submit" class="save-btn" id="submitBtn">Save Student</button>
+</form>
+
+<table id="studentTable">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>School</th>
+            <th>Class</th>
+            <th>Age</th>
+            <th>Action</th>
+        </tr>
+    </thead>
+    <tbody></tbody>
+</table>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<script>
+// Firebase Config
+const firebaseConfig = {
+  apiKey: "AIzaSyAnMXu_iJJIM5xoHYl2bMgsQdHx1IWUaJY",
+  authDomain: "bouldering-4d840.firebaseapp.com",
+  databaseURL: "https://bouldering-4d840-default-rtdb.asia-southeast1.firebasedatabase.app/",
+  projectId: "bouldering-4d840",
+  storageBucket: "bouldering-4d840.firebasestorage.app",
+  messagingSenderId: "457379325638",
+  appId: "1:457379325638:web:a06a8c65c132542f4219c7"
+};
+
+// Initialize Firebase
+firebase.initializeApp(firebaseConfig);
+const database = firebase.database();
+const studentsRef = database.ref("students");
+
+// DOM
+const form = document.getElementById("studentForm");
+const tableBody = document.querySelector("#studentTable tbody");
+const submitBtn = document.getElementById("submitBtn");
+const editKeyInput = document.getElementById("editKey");
+
+let students = [];
+
+// Generate ID
+function generateID() {
+    return String(students.length + 1).padStart(3, "0");
+}
+
+// Render Table
+function renderTable() {
+    tableBody.innerHTML = "";
+    students.forEach(s => {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+            <td>${s.id}</td>
+            <td>${s.name}</td>
+            <td>${s.school}</td>
+            <td>${s.class}</td>
+            <td>${s.age}</td>
+            <td>
+                <button class="edit-btn" onclick="editStudent('${s.key}')">Edit</button>
+                <button class="delete-btn" onclick="deleteStudent('${s.key}')">Delete</button>
+            </td>
+        `;
+        tableBody.appendChild(row);
+    });
+}
+
+// Load from Firebase
+studentsRef.on("value", snapshot => {
+    students = [];
+    snapshot.forEach(child => {
+        students.push({
+            key: child.key,
+            ...child.val()
+        });
+    });
+
+    localStorage.setItem("students", JSON.stringify(students));
+    renderTable();
+});
+
+// Edit
+window.editStudent = function(key) {
+    const student = students.find(s => s.key === key);
+    if (!student) return;
+
+    document.getElementById("name").value = student.name;
+    document.getElementById("school").value = student.school;
+    document.getElementById("class").value = student.class;
+    document.getElementById("age").value = student.age;
+
+    editKeyInput.value = key;
+    submitBtn.textContent = "Update Student";
+};
+
+// Delete
+window.deleteStudent = function(key) {
+    if (!confirm("Delete this student?")) return;
+
+    studentsRef.child(key).remove();
+};
+
+// Submit
+form.addEventListener("submit", function(e) {
+    e.preventDefault();
+
+    const studentData = {
+        name: document.getElementById("name").value.trim(),
+        school: document.getElementById("school").value.trim(),
+        class: document.getElementById("class").value.trim(),
+        age: document.getElementById("age").value
+    };
+
+    const editKey = editKeyInput.value;
+
+    if (editKey) {
+        // UPDATE
+        studentsRef.child(editKey).update(studentData);
+        editKeyInput.value = "";
+        submitBtn.textContent = "Save Student";
+    } else {
+        // ADD
+        const newStudent = {
+            id: generateID(),
+            ...studentData
+        };
+        studentsRef.push(newStudent);
+    }
+
+    form.reset();
+});
+</script>
+
+</body>
+</html>
