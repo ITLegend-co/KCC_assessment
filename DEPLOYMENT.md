@@ -112,7 +112,7 @@ Since you're already using Firebase for the database, hosting on Firebase makes 
    ```
    
    Configuration:
-   - Use existing project: Select your `bouldering-4d840` project
+   - Use existing project: Select your `bouldering-2` project
    - Public directory: `dist`
    - Single-page app: `Yes`
    - GitHub auto-deploys: Optional
@@ -131,7 +131,7 @@ Since you're already using Firebase for the database, hosting on Firebase makes 
    - Create `.env.production` file with your variables
    - Or use Firebase Environment Config
 
-Your site will be live at: `https://bouldering-4d840.web.app`
+Your site will be live at: `https://bouldering-2.web.app`
 
 ---
 
