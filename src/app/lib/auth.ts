@@ -1,5 +1,5 @@
 import { database } from './firebase';
-import { ref, get, set, update } from 'firebase/database';
+import { ref, get, update } from 'firebase/database';
 
 export interface User {
   username: string;
@@ -13,22 +13,6 @@ export interface CurrentUser {
   username: string;
   role: 'administrator' | 'chief-judge' | 'judge' | 'registry';
 }
-
-// Initialize default admin user
-export const initializeDefaultAdmin = async () => {
-  const usersRef = ref(database, 'users');
-  const snapshot = await get(usersRef);
-
-  if (!snapshot.exists()) {
-    const adminRef = ref(database, 'users/admin');
-    await set(adminRef, {
-      username: 'admin',
-      password: 'admin1234', // In production, this should be hashed
-      role: 'administrator',
-      createdAt: new Date().toISOString(),
-    });
-  }
-};
 
 // Login function
 export const login = async (username: string, password: string): Promise<CurrentUser | null> => {

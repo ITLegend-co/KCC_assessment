@@ -1,7 +1,7 @@
-import { useState, useEffect, FormEvent } from 'react';
+import { useState, FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { LogIn, User, Lock } from 'lucide-react';
-import { login, setCurrentUser, initializeDefaultAdmin } from '../lib/auth';
+import { login, setCurrentUser } from '../lib/auth';
 
 export default function Login() {
   const [username, setUsername] = useState('');
@@ -9,10 +9,6 @@ export default function Login() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
-
-  useEffect(() => {
-    initializeDefaultAdmin();
-  }, []);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
