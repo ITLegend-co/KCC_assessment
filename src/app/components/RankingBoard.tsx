@@ -3,6 +3,7 @@ import { Trophy, Medal, Award, Search, Copy, Check, Users, X } from 'lucide-reac
 import { motion, AnimatePresence } from 'motion/react';
 import { database } from '../lib/firebase';
 import { ref, onValue } from 'firebase/database';
+import { calculateBoulderPoints } from '../lib/scoring';
 
 interface Student {
   id: string;
@@ -32,6 +33,7 @@ interface RankingEntry {
   zone: number;
   at: number;
   az: number;
+  points: number;
   gender: 'male' | 'female';
   originalRank?: number;
 }
@@ -141,6 +143,7 @@ export function RankingBoard({ showCopyLink = false }: RankingBoardProps) {
             zone: 0,
             at: 0,
             az: 0,
+            points: 0,
             gender: student.gender || 'male',
           };
         }
@@ -156,6 +159,10 @@ export function RankingBoard({ showCopyLink = false }: RankingBoardProps) {
           summary[s.id].zone += 1;
           summary[s.id].az += s.az;
         }
+
+        summary[s.id].points = Number(
+          (summary[s.id].points + calculateBoulderPoints(s.at, s.az)).toFixed(1),
+        );
       });
 
     let result = Object.values(summary);
@@ -165,13 +172,8 @@ export function RankingBoard({ showCopyLink = false }: RankingBoardProps) {
       result = result.filter((entry) => entry.gender === genderFilter);
     }
 
-    // IFSC sorting: Top (desc), Zone (desc), AT (asc), AZ (asc)
-    result.sort((a, b) => {
-      if (b.top !== a.top) return b.top - a.top;
-      if (b.zone !== a.zone) return b.zone - a.zone;
-      if (a.at !== b.at) return a.at - b.at;
-      return a.az - b.az;
-    });
+    // Point-based ranking: highest total points first.
+    result.sort((a, b) => b.points - a.points);
 
     setRanking(result);
   };
@@ -210,10 +212,7 @@ export function RankingBoard({ showCopyLink = false }: RankingBoardProps) {
     const prev = list[index - 1];
 
     if (
-      current.top === prev.top &&
-      current.zone === prev.zone &&
-      current.at === prev.at &&
-      current.az === prev.az
+      current.points === prev.points
     ) {
       // Same rank as previous
       return getRankDisplay(index - 1, list);
@@ -301,10 +300,9 @@ export function RankingBoard({ showCopyLink = false }: RankingBoardProps) {
                 <th className="px-4 py-3 text-left font-bold text-slate-700">Rank</th>
                 <th className="px-4 py-3 text-left font-bold text-slate-700">BIB</th>
                 <th className="px-4 py-3 text-left font-bold text-slate-700">Name</th>
-                <th className="px-4 py-3 text-center font-bold text-slate-700">T</th>
-                <th className="px-4 py-3 text-center font-bold text-slate-700">Z</th>
-                <th className="px-4 py-3 text-center font-bold text-slate-700">AT</th>
-                <th className="px-4 py-3 text-center font-bold text-slate-700">AZ</th>
+                <th className="px-4 py-3 text-center font-bold text-slate-700">Points</th>
+                <th className="px-4 py-3 text-center font-bold text-slate-700">Tops</th>
+                <th className="px-4 py-3 text-center font-bold text-slate-700">Zones</th>
               </tr>
             </thead>
             <tbody>
@@ -384,6 +382,17 @@ export function RankingBoard({ showCopyLink = false }: RankingBoardProps) {
                         )}
                       </td>
                       <td className="px-4 py-4 text-center">
+                        <motion.span
+                          className="inline-flex items-center justify-center min-w-[4.5rem] h-10 px-3 rounded-lg bg-blue-100 text-blue-700 font-bold"
+                          key={`points-${entry.id}-${entry.points}`}
+                          initial={{ scale: 1 }}
+                          animate={{ scale: [1, 1.2, 1] }}
+                          transition={{ duration: 0.4 }}
+                        >
+                          {entry.points.toFixed(1)}
+                        </motion.span>
+                      </td>
+                      <td className="px-4 py-4 text-center">
                         <motion.span 
                           className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-emerald-100 text-emerald-700 font-bold"
                           key={`top-${entry.id}-${entry.top}`}
@@ -403,28 +412,6 @@ export function RankingBoard({ showCopyLink = false }: RankingBoardProps) {
                           transition={{ duration: 0.4 }}
                         >
                           {entry.zone}
-                        </motion.span>
-                      </td>
-                      <td className="px-4 py-4 text-center">
-                        <motion.span 
-                          className="inline-flex items-center justify-center min-w-[2.5rem] h-10 px-2 rounded-lg bg-emerald-50 text-emerald-600 font-semibold text-sm"
-                          key={`at-${entry.id}-${entry.at}`}
-                          initial={{ scale: 1 }}
-                          animate={{ scale: [1, 1.15, 1] }}
-                          transition={{ duration: 0.3 }}
-                        >
-                          {entry.at}
-                        </motion.span>
-                      </td>
-                      <td className="px-4 py-4 text-center">
-                        <motion.span 
-                          className="inline-flex items-center justify-center min-w-[2.5rem] h-10 px-2 rounded-lg bg-amber-50 text-amber-600 font-semibold text-sm"
-                          key={`az-${entry.id}-${entry.az}`}
-                          initial={{ scale: 1 }}
-                          animate={{ scale: [1, 1.15, 1] }}
-                          transition={{ duration: 0.3 }}
-                        >
-                          {entry.az}
                         </motion.span>
                       </td>
                     </motion.tr>
@@ -551,20 +538,20 @@ export function RankingBoard({ showCopyLink = false }: RankingBoardProps) {
         <h3 className="text-lg font-bold mb-3">Scoring Legend</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
           <div className="flex items-center gap-2">
-            <span className="font-semibold">T:</span>
-            <span>Number of Tops</span>
+            <span className="font-semibold">Top:</span>
+            <span>25.0 − 0.1 per failed attempt before Top</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="font-semibold">Z:</span>
-            <span>Number of Zones</span>
+            <span className="font-semibold">Zone only:</span>
+            <span>10.0 − 0.1 per failed attempt before Zone</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="font-semibold">AT:</span>
-            <span>Attempts to Top</span>
+            <span className="font-semibold">Per boulder:</span>
+            <span>Higher of Top or Zone, minimum 0.0</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="font-semibold">AZ:</span>
-            <span>Attempts to Zone</span>
+            <span className="font-semibold">Maximum:</span>
+            <span>125.0 for 5 boulders; 150.0 for 6</span>
           </div>
         </div>
       </div>

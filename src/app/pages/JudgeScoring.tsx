@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { database } from '../lib/firebase';
 import { ref, push, onValue, remove } from 'firebase/database';
 import { getCurrentUser } from '../lib/auth';
+import { calculateBoulderPoints } from '../lib/scoring';
 
 interface Student {
   id: string;
@@ -63,7 +64,7 @@ export default function JudgeScoring() {
   const [showClashModal, setShowClashModal] = useState(false);
   const [clashLatestScore, setClashLatestScore] = useState<Score | null>(null);
   const [scoreSearch, setScoreSearch] = useState('');
-const [scoreSortBy, setScoreSortBy] = useState<'name' | 'id' | 'round' | 'boulder' | 'at' | 'az'>('name');
+const [scoreSortBy, setScoreSortBy] = useState<'name' | 'id' | 'round' | 'boulder' | 'at' | 'az' | 'points'>('name');
 const [scoreSortOrder, setScoreSortOrder] = useState<'asc' | 'desc'>('asc');
   const [isEditingLatest, setIsEditingLatest] = useState(false);
 
@@ -200,6 +201,9 @@ const [scoreSortOrder, setScoreSortOrder] = useState<'asc' | 'desc'>('asc');
       } else if (scoreSortBy === 'az') {
         valueA = a.az ?? 9999;
         valueB = b.az ?? 9999;
+      } else if (scoreSortBy === 'points') {
+        valueA = calculateBoulderPoints(a.at, a.az);
+        valueB = calculateBoulderPoints(b.at, b.az);
       }
 
       if (valueA < valueB) return scoreSortOrder === 'asc' ? -1 : 1;
@@ -283,6 +287,7 @@ const [scoreSortOrder, setScoreSortOrder] = useState<'asc' | 'desc'>('asc');
       at: at ?? null,
       az: az ?? null,
       attemptCount: attemptCount ?? 0,
+      points: calculateBoulderPoints(at, az),
       timestamp: Date.now(),
       version: nextVersion,
     };
@@ -629,6 +634,12 @@ const startCreateNew = () => {
                       <span className="font-bold text-emerald-600">{at ?? '-'}</span>
                     </div>
                   </div>
+                  <div className="pt-3 border-t border-slate-200 text-lg">
+                    <span className="font-semibold text-slate-700">Boulder Points:</span>{' '}
+                    <span className="font-bold text-blue-600">
+                      {calculateBoulderPoints(at, az).toFixed(1)} / 25.0
+                    </span>
+                  </div>
                 </div>
 
                 <button
@@ -756,6 +767,7 @@ const startCreateNew = () => {
       <option value="boulder">Sort by Boulder</option>
       <option value="at">Sort by AT</option>
       <option value="az">Sort by AZ</option>
+      <option value="points">Sort by Points</option>
     </select>
 
     <select
@@ -809,6 +821,9 @@ const startCreateNew = () => {
                       AZ
                     </th>
                     <th className="px-3 py-3 text-center text-sm font-semibold text-slate-700">
+                      Points
+                    </th>
+                    <th className="px-3 py-3 text-center text-sm font-semibold text-slate-700">
                       History
                     </th>
                   </tr>
@@ -817,7 +832,7 @@ const startCreateNew = () => {
                   {getFilteredAndSortedScores().length === 0 ? (
                     <tr>
                       <td
-                        colSpan={7}
+                        colSpan={8}
                         className="px-4 py-8 text-center text-slate-500"
                       >
                         No scores recorded yet
@@ -860,6 +875,9 @@ const startCreateNew = () => {
                           </td>
                           <td className="px-3 py-3 text-sm text-center font-semibold text-amber-600">
                             {score.az ?? '-'}
+                          </td>
+                          <td className="px-3 py-3 text-sm text-center font-bold text-blue-600">
+                            {calculateBoulderPoints(score.at, score.az).toFixed(1)}
                           </td>
                           <td className="px-3 py-3 text-center">
                             {hasHistory ? (
@@ -913,6 +931,7 @@ const startCreateNew = () => {
           <p><strong>Boulder:</strong> {boulder}</p>
           <p><strong>Latest AT:</strong> {clashLatestScore.at ?? '-'}</p>
           <p><strong>Latest AZ:</strong> {clashLatestScore.az ?? '-'}</p>
+          <p><strong>Points:</strong> {calculateBoulderPoints(clashLatestScore.at, clashLatestScore.az).toFixed(1)}</p>
           <p><strong>Version:</strong> {clashLatestScore.version || 1}</p>
         </div>
 
@@ -1026,6 +1045,12 @@ const startCreateNew = () => {
                           <span className="text-sm text-slate-600">AT:</span>{' '}
                           <span className="text-lg font-bold text-emerald-600">
                             {score.at ?? '-'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-sm text-slate-600">Points:</span>{' '}
+                          <span className="text-lg font-bold text-blue-600">
+                            {calculateBoulderPoints(score.at, score.az).toFixed(1)}
                           </span>
                         </div>
                         <div>
