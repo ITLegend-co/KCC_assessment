@@ -1,10 +1,11 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { BackButton } from '../components/BackButton';
-import { Save, Edit2, Trash2, ArrowUpDown } from 'lucide-react';
+import { Save, Edit2, Trash2, ArrowUpDown, QrCode, X } from 'lucide-react';
 import { database } from '../lib/firebase';
 import { ref, push, set, update, remove, onValue } from 'firebase/database';
 import { getCurrentUser } from '../lib/auth';
+import { QrCodeCard } from '../components/QrCodeCard';
 
 interface Student {
   id: string;
@@ -49,6 +50,7 @@ export default function StudentRegistration() {
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
   const [selectAll, setSelectAll] = useState(false);
+  const [qrStudent, setQrStudent] = useState<Student | null>(null);
 
   // Load students from Firebase with real-time updates
   useEffect(() => {
@@ -387,7 +389,7 @@ export default function StudentRegistration() {
                 {students.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={7}
+                      colSpan={8}
                       className="px-4 py-8 text-center text-slate-500"
                     >
                       No students registered yet
@@ -434,6 +436,16 @@ export default function StudentRegistration() {
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-center gap-2">
                           <button
+                            type="button"
+                            onClick={() => setQrStudent(student)}
+                            className="p-2 text-violet-600 hover:bg-violet-50 rounded-lg transition-colors"
+                            title={`Generate QR for ${student.id}`}
+                            aria-label={`Generate QR for BIB ${student.id}`}
+                          >
+                            <QrCode className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => handleEdit(student)}
                             className="p-2 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
                             title="Edit"
@@ -441,6 +453,7 @@ export default function StudentRegistration() {
                             <Edit2 className="w-4 h-4" />
                           </button>
                           <button
+                            type="button"
                             onClick={() => handleDelete(student.key!)}
                             className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                             title="Delete"
@@ -476,6 +489,23 @@ export default function StudentRegistration() {
             </div>
           )}
         </div>
+
+        {qrStudent && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setQrStudent(null)}>
+            <div className="relative w-full max-w-md" onClick={(event) => event.stopPropagation()}>
+              <button type="button" onClick={() => setQrStudent(null)} className="absolute right-3 top-3 z-10 rounded-lg bg-white p-2 shadow hover:bg-slate-100" aria-label="Close QR">
+                <X className="h-5 w-5" />
+              </button>
+              <QrCodeCard
+                value={`KCC:BIB:${qrStudent.id}`}
+                title="Student BIB"
+                subtitle={qrStudent.id}
+                fileName={`KCC-BIB-${qrStudent.id}`}
+                prominentSubtitle
+              />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
