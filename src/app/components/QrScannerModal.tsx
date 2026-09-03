@@ -11,33 +11,67 @@ interface QrScannerModalProps {
 export function QrScannerModal({ title, onScan, onClose }: QrScannerModalProps) {
   const readerId = useRef(`qr-reader-${Math.random().toString(36).slice(2)}`);
   const scannerRef = useRef<Html5Qrcode | null>(null);
+  const startPromiseRef = useRef<Promise<unknown> | null>(null);
   const handledRef = useRef(false);
   const [error, setError] = useState('');
+
+  const stopAndClearScanner = async () => {
+    const startPromise = startPromiseRef.current;
+    if (startPromise) {
+      await startPromise.catch(() => undefined);
+      startPromiseRef.current = null;
+    }
+
+    const scanner = scannerRef.current;
+    if (!scanner) return;
+    scannerRef.current = null;
+
+    try {
+      if (scanner.isScanning) {
+        await scanner.stop();
+      }
+    } catch {
+      // The camera may already have stopped during modal cleanup.
+    }
+
+    try {
+      await scanner.clear();
+    } catch {
+      // Clearing is best-effort after the camera has fully stopped.
+    }
+  };
+
+  const handleClose = async () => {
+    handledRef.current = true;
+    await stopAndClearScanner();
+    onClose();
+  };
 
   useEffect(() => {
     const scanner = new Html5Qrcode(readerId.current);
     scannerRef.current = scanner;
 
-    scanner
-      .start(
+    const startPromise = scanner.start(
         { facingMode: 'environment' },
         { fps: 10, qrbox: { width: 240, height: 240 } },
         (decodedText) => {
           if (handledRef.current) return;
           handledRef.current = true;
-          onScan(decodedText);
+          void stopAndClearScanner().then(() => onScan(decodedText));
         },
         () => undefined,
-      )
-      .catch(() => setError('Unable to open the camera. Please allow camera access and try again.'));
+      );
+    startPromiseRef.current = startPromise;
+    startPromise.catch(() => {
+      startPromiseRef.current = null;
+      if (!handledRef.current) {
+        setError('Unable to open the camera. Please allow camera access and try again.');
+      }
+    });
 
     return () => {
       handledRef.current = true;
-      const activeScanner = scannerRef.current;
-      if (activeScanner?.isScanning) {
-        activeScanner.stop().catch(() => undefined);
-      }
-      activeScanner?.clear();
+      void stopAndClearScanner();
     };
   }, [onScan]);
 
@@ -49,7 +83,7 @@ export function QrScannerModal({ title, onScan, onClose }: QrScannerModalProps) 
             <Camera className="h-5 w-5 text-emerald-600" />
             {title}
           </h3>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 hover:bg-slate-100">
+          <button type="button" onClick={() => void handleClose()} className="rounded-lg p-2 hover:bg-slate-100">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -60,4 +94,3 @@ export function QrScannerModal({ title, onScan, onClose }: QrScannerModalProps) 
     </div>
   );
 }
-
