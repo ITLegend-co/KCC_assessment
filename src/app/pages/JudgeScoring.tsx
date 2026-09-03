@@ -9,6 +9,7 @@ import { ref, push, onValue, remove } from 'firebase/database';
 import { getCurrentUser } from '../lib/auth';
 import { calculateBoulderPoints } from '../lib/scoring';
 import { QrScannerModal } from '../components/QrScannerModal';
+import { useRounds } from '../hooks/useRounds';
 
 interface Student {
   id: string;
@@ -35,6 +36,7 @@ interface Score {
 export default function JudgeScoring() {
   const navigate = useNavigate();
   const currentUser = getCurrentUser();
+  const rounds = useRounds();
   const canViewScores = currentUser?.role === 'administrator' || currentUser?.role === 'chief-judge';
 
   useEffect(() => {
@@ -593,9 +595,9 @@ const startCreateNew = () => {
                     className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                   >
                     <option value="">-- Select Round --</option>
-                    <option value="Qualifier">Qualifier</option>
-                    <option value="Semi Final">Semi Final</option>
-                    <option value="Final">Final</option>
+                    {rounds.map((roundName) => (
+                      <option key={roundName} value={roundName}>{roundName}</option>
+                    ))}
                   </select>
                 </div>
 

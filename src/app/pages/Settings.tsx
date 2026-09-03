@@ -3,8 +3,9 @@ import { BackButton } from '../components/BackButton';
 import { getCurrentUser, User } from '../lib/auth';
 import { database } from '../lib/firebase';
 import { ref, get, set, update, remove } from 'firebase/database';
-import { Settings as SettingsIcon, Key, UserPlus, Trash2, Save } from 'lucide-react';
+import { Settings as SettingsIcon, Key, UserPlus, Trash2, Save, ListChecks, Plus, ArrowUp, ArrowDown } from 'lucide-react';
 import { useNavigate } from 'react-router';
+import { DEFAULT_ROUNDS, normalizeRounds } from '../lib/rounds';
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -21,6 +22,10 @@ export default function Settings() {
   const [newUserRole, setNewUserRole] = useState<'chief-judge' | 'judge' | 'registry'>('judge');
   const [userError, setUserError] = useState('');
   const [userSuccess, setUserSuccess] = useState('');
+  const [rounds, setRounds] = useState<string[]>(DEFAULT_ROUNDS);
+  const [newRound, setNewRound] = useState('');
+  const [roundError, setRoundError] = useState('');
+  const [roundSuccess, setRoundSuccess] = useState('');
 
   useEffect(() => {
     if (!currentUser || currentUser.role !== 'administrator') {
@@ -28,6 +33,7 @@ export default function Settings() {
       return;
     }
     loadUsers();
+    loadRounds();
   }, [currentUser, navigate]);
 
   const loadUsers = async () => {
@@ -41,6 +47,76 @@ export default function Settings() {
         key,
       }));
       setUsers(usersList);
+    }
+  };
+
+  const loadRounds = async () => {
+    const snapshot = await get(ref(database, 'settings/rounds'));
+    setRounds(snapshot.exists() ? normalizeRounds(snapshot.val()) : DEFAULT_ROUNDS);
+  };
+
+  const handleRoundNameChange = (index: number, value: string) => {
+    setRounds((current) => current.map((roundName, itemIndex) => itemIndex === index ? value : roundName));
+    setRoundError('');
+    setRoundSuccess('');
+  };
+
+  const handleAddRound = () => {
+    const roundName = newRound.trim();
+    if (!roundName) {
+      setRoundError('Enter a round name');
+      return;
+    }
+    if (rounds.some((item) => item.trim().toLowerCase() === roundName.toLowerCase())) {
+      setRoundError('Round name already exists');
+      return;
+    }
+    setRounds((current) => [...current, roundName]);
+    setNewRound('');
+    setRoundError('');
+    setRoundSuccess('');
+  };
+
+  const handleDeleteRound = (index: number) => {
+    if (rounds.length === 1) {
+      setRoundError('At least one round is required');
+      return;
+    }
+    setRounds((current) => current.filter((_, itemIndex) => itemIndex !== index));
+    setRoundError('');
+    setRoundSuccess('');
+  };
+
+  const moveRound = (index: number, direction: -1 | 1) => {
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= rounds.length) return;
+    setRounds((current) => {
+      const updated = [...current];
+      [updated[index], updated[targetIndex]] = [updated[targetIndex], updated[index]];
+      return updated;
+    });
+    setRoundSuccess('');
+  };
+
+  const handleSaveRounds = async () => {
+    setRoundError('');
+    setRoundSuccess('');
+    const cleanedRounds = rounds.map((item) => item.trim()).filter(Boolean);
+    if (cleanedRounds.length === 0) {
+      setRoundError('At least one round is required');
+      return;
+    }
+    if (new Set(cleanedRounds.map((item) => item.toLowerCase())).size !== cleanedRounds.length) {
+      setRoundError('Round names must be unique');
+      return;
+    }
+
+    try {
+      await set(ref(database, 'settings/rounds'), cleanedRounds);
+      setRounds(cleanedRounds);
+      setRoundSuccess('Rounds saved successfully');
+    } catch {
+      setRoundError('Failed to save rounds');
     }
   };
 
@@ -210,6 +286,65 @@ export default function Settings() {
                 Change Password
               </button>
             </form>
+          </div>
+
+          {/* Round Management Section */}
+          <div className="border-b border-slate-200 pb-6 mb-6">
+            <div className="flex items-center gap-2 mb-2">
+              <ListChecks className="w-5 h-5 text-slate-600" />
+              <h3 className="text-xl font-bold text-slate-900">Manage Rounds</h3>
+            </div>
+            <p className="mb-4 text-sm text-slate-600">
+              These rounds will appear in the Judging Panel and Student Ranking. Removing a round does not delete its previous scores.
+            </p>
+
+            <div className="space-y-3">
+              {rounds.map((roundName, index) => (
+                <div key={index} className="flex items-center gap-2">
+                  <span className="w-7 text-center text-sm font-semibold text-slate-500">{index + 1}</span>
+                  <input
+                    value={roundName}
+                    onChange={(event) => handleRoundNameChange(index, event.target.value)}
+                    aria-label={`Round ${index + 1} name`}
+                    className="min-w-0 flex-1 rounded-lg border border-slate-300 px-4 py-2 focus:ring-2 focus:ring-emerald-500"
+                  />
+                  <button type="button" onClick={() => moveRound(index, -1)} disabled={index === 0} aria-label={`Move ${roundName} up`} className="rounded-lg bg-slate-100 p-2 text-slate-700 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-40">
+                    <ArrowUp className="h-5 w-5" />
+                  </button>
+                  <button type="button" onClick={() => moveRound(index, 1)} disabled={index === rounds.length - 1} aria-label={`Move ${roundName} down`} className="rounded-lg bg-slate-100 p-2 text-slate-700 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-40">
+                    <ArrowDown className="h-5 w-5" />
+                  </button>
+                  <button type="button" onClick={() => handleDeleteRound(index)} aria-label={`Delete ${roundName}`} className="rounded-lg bg-red-100 p-2 text-red-700 hover:bg-red-200">
+                    <Trash2 className="h-5 w-5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+              <input
+                value={newRound}
+                onChange={(event) => setNewRound(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    handleAddRound();
+                  }
+                }}
+                placeholder="New round name"
+                className="min-w-0 flex-1 rounded-lg border border-slate-300 px-4 py-2 focus:ring-2 focus:ring-emerald-500"
+              />
+              <button type="button" onClick={handleAddRound} className="flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700">
+                <Plus className="h-5 w-5" /> Add Round
+              </button>
+            </div>
+
+            {roundError && <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{roundError}</div>}
+            {roundSuccess && <div className="mt-4 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700">{roundSuccess}</div>}
+
+            <button type="button" onClick={handleSaveRounds} className="mt-4 flex items-center gap-2 rounded-lg bg-emerald-600 px-6 py-3 font-semibold text-white shadow-md hover:bg-emerald-700">
+              <Save className="h-5 w-5" /> Save Rounds
+            </button>
           </div>
 
           {/* Create User Section */}

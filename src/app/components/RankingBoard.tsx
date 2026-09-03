@@ -5,6 +5,7 @@ import { database } from '../lib/firebase';
 import { ref, onValue } from 'firebase/database';
 import { calculateBoulderPoints } from '../lib/scoring';
 import { QrCodeCard } from './QrCodeCard';
+import { useRounds } from '../hooks/useRounds';
 
 const RANKING_ONLY_URL = 'https://itlegend-co.github.io/KCC_assessment/#/ranking-only';
 
@@ -53,6 +54,13 @@ export function RankingBoard({ showCopyLink = false }: RankingBoardProps) {
   const [linkCopied, setLinkCopied] = useState(false);
   const [selectedStudentInfo, setSelectedStudentInfo] = useState<Student | null>(null);
   const [showRankingQr, setShowRankingQr] = useState(false);
+  const rounds = useRounds();
+
+  useEffect(() => {
+    if (!rounds.includes(selectedRound)) {
+      setSelectedRound(rounds[0]);
+    }
+  }, [rounds, selectedRound]);
 
   useEffect(() => {
     // Load students from Firebase
@@ -399,9 +407,9 @@ export function RankingBoard({ showCopyLink = false }: RankingBoardProps) {
                 onChange={(e) => setSelectedRound(e.target.value)}
                 className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent bg-white"
               >
-                <option value="Qualifier">Qualifier</option>
-                <option value="Semi Final">Semi Final</option>
-                <option value="Final">Final</option>
+                {rounds.map((roundName) => (
+                  <option key={roundName} value={roundName}>{roundName}</option>
+                ))}
               </select>
             </div>
           </div>
