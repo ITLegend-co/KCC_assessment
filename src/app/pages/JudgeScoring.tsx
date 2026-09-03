@@ -2,12 +2,13 @@ import { useState, useEffect, FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { BackButton } from '../components/BackButton';
 import { SearchableSelect } from '../components/SearchableSelect';
-import { Save, Trash2, Undo2, ChevronRight, ChevronLeft, History, X as CloseIcon } from 'lucide-react';
+import { Save, Trash2, Undo2, ChevronRight, ChevronLeft, History, X as CloseIcon, Camera } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { database } from '../lib/firebase';
 import { ref, push, onValue, remove } from 'firebase/database';
 import { getCurrentUser } from '../lib/auth';
 import { calculateBoulderPoints } from '../lib/scoring';
+import { QrScannerModal } from '../components/QrScannerModal';
 
 interface Student {
   id: string;
@@ -67,6 +68,7 @@ export default function JudgeScoring() {
 const [scoreSortBy, setScoreSortBy] = useState<'name' | 'id' | 'round' | 'boulder' | 'at' | 'az' | 'points'>('name');
 const [scoreSortOrder, setScoreSortOrder] = useState<'asc' | 'desc'>('asc');
   const [isEditingLatest, setIsEditingLatest] = useState(false);
+  const [scannerMode, setScannerMode] = useState<'student' | 'boulder' | null>(null);
 
   // Multi-step state
   const [currentStep, setCurrentStep] = useState(1);
@@ -297,7 +299,7 @@ const [scoreSortOrder, setScoreSortOrder] = useState<'asc' | 'desc'>('asc');
     setIsEditingLatest(false);
 
     if (canViewScores) {
-      setCurrentStep(3);
+      setCurrentStep(5);
     } else {
       resetForm();
     }
@@ -435,20 +437,38 @@ const startEditFromLatest = () => {
 
   setAttemptHistory([]);
   setShowClashModal(false);
-  setCurrentStep(2);
+  setCurrentStep(4);
 };
 
 const startCreateNew = () => {
   resetAttempts();
   setIsEditingLatest(false);
   setShowClashModal(false);
-  setCurrentStep(2);
+  setCurrentStep(4);
 };
   
   const handleNextStep = () => {
   if (currentStep === 1) {
-    if (!selectedStudent || !round || !boulder) {
-      alert('Please fill in all fields');
+    if (!round) {
+      alert('Please select a round');
+      return;
+    }
+    setCurrentStep(2);
+    return;
+  }
+
+  if (currentStep === 2) {
+    if (!selectedStudent) {
+      alert('Please select or scan a student');
+      return;
+    }
+    setCurrentStep(3);
+    return;
+  }
+
+  if (currentStep === 3) {
+    if (!boulder || Number(boulder) < 1) {
+      alert('Please enter or scan a valid boulder number');
       return;
     }
 
@@ -461,18 +481,55 @@ const startCreateNew = () => {
     }
 
     resetAttempts();
-    setCurrentStep(2);
+    setCurrentStep(4);
   }
 };
 
   const handlePreviousStep = () => {
-    if (currentStep === 2) {
-      setCurrentStep(1);
+    if (currentStep === 4) {
+      setCurrentStep(3);
       resetAttempts();
-    } else if (currentStep === 3) {
-      setCurrentStep(2);
+    } else if (currentStep > 1 && currentStep < 4) {
+      setCurrentStep(currentStep - 1);
+    } else if (currentStep === 5) {
+      setCurrentStep(4);
     }
   };
+
+  const handleQrScan = (rawValue: string) => {
+    if (scannerMode === 'student') {
+      const scannedBib = rawValue.startsWith('KCC:BIB:')
+        ? rawValue.slice('KCC:BIB:'.length).trim()
+        : rawValue.trim();
+      const student = students.find((item) => item.id.toLowerCase() === scannedBib.toLowerCase());
+      if (!student) {
+        alert(`No student found for BIB: ${scannedBib}`);
+        setScannerMode(null);
+        return;
+      }
+      setSelectedStudent(student.id);
+    }
+
+    if (scannerMode === 'boulder') {
+      const scannedBoulder = rawValue.startsWith('KCC:BOULDER:')
+        ? rawValue.slice('KCC:BOULDER:'.length).trim()
+        : rawValue.trim();
+      if (!/^\d+$/.test(scannedBoulder) || Number(scannedBoulder) < 1) {
+        alert('This is not a valid boulder QR code.');
+        setScannerMode(null);
+        return;
+      }
+      setBoulder(String(Number(scannedBoulder)));
+    }
+
+    setScannerMode(null);
+  };
+
+  const pointDisplay = at
+    ? `${calculateBoulderPoints(at, az).toFixed(1)} / 25`
+    : az
+      ? `${calculateBoulderPoints(at, az).toFixed(1)} / 10.0`
+      : '0.0 / 0.0';
 
   const handleShowHistory = (id: string, round: string, boulder: number) => {
     const history = getScoreHistory(id, round, boulder);
@@ -498,38 +555,26 @@ const startCreateNew = () => {
 
           {/* Step Indicator */}
           <div className="mb-6">
-            <div className="flex items-center justify-center gap-2">
-              <div className={`flex items-center justify-center w-10 h-10 rounded-full font-bold ${
-                currentStep >= 1 ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'
-              }`}>
-                1
-              </div>
-              <div className={`h-1 w-16 ${currentStep >= 2 ? 'bg-emerald-500' : 'bg-slate-200'}`} />
-              <div className={`flex items-center justify-center w-10 h-10 rounded-full font-bold ${
-                currentStep >= 2 ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'
-              }`}>
-                2
-              </div>
-              {canViewScores && (
-                <>
-                  <div className={`h-1 w-16 ${currentStep >= 3 ? 'bg-emerald-500' : 'bg-slate-200'}`} />
-                  <div className={`flex items-center justify-center w-10 h-10 rounded-full font-bold ${
-                    currentStep >= 3 ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'
-                  }`}>
-                    3
+            <div className="flex items-start justify-center overflow-x-auto pb-2">
+              {(canViewScores ? ['Round', 'Student', 'Boulder', 'Scoring', 'Records'] : ['Round', 'Student', 'Boulder', 'Scoring']).map((label, index, steps) => {
+                const step = index + 1;
+                return (
+                  <div key={label} className="flex items-start">
+                    <div className="flex w-16 flex-col items-center sm:w-20">
+                      <div className={`flex h-9 w-9 items-center justify-center rounded-full font-bold ${currentStep >= step ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                        {step}
+                      </div>
+                      <span className={`mt-2 text-xs ${currentStep === step ? 'font-semibold text-emerald-700' : 'text-slate-500'}`}>{label}</span>
+                    </div>
+                    {index < steps.length - 1 && <div className={`mt-4 h-1 w-6 sm:w-10 ${currentStep > step ? 'bg-emerald-500' : 'bg-slate-200'}`} />}
                   </div>
-                </>
-              )}
-            </div>
-            <div className="flex justify-center gap-2 mt-2">
-              <span className="text-xs text-slate-600">Selection</span>
-              <span className="text-xs text-slate-400 mx-8">Scoring</span>
-              {canViewScores && <span className="text-xs text-slate-400 mx-8">Records</span>}
+                );
+              })}
             </div>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6" noValidate>
-            {/* Step 1: Selection */}
+            {/* Step 1: Round */}
             {currentStep === 1 && (
               <motion.div
                 initial={{ opacity: 0, x: -20 }}
@@ -537,22 +582,6 @@ const startCreateNew = () => {
                 exit={{ opacity: 0, x: 20 }}
                 className="space-y-6"
               >
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    Select Student
-                  </label>
-                  <SearchableSelect
-                    value={selectedStudent}
-                    onChange={setSelectedStudent}
-                    options={students.map((student) => ({
-                      value: student.id,
-                      label: `${student.id} - ${student.name}`,
-                    }))}
-                    placeholder="-- Select Student --"
-                    required
-                  />
-                </div>
-
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-2">
                     Round
@@ -570,20 +599,6 @@ const startCreateNew = () => {
                   </select>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    Boulder
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={boulder}
-                    onChange={(e) => setBoulder(e.target.value)}
-                    required
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                  />
-                </div>
-
                 <button
                   type="button"
                   onClick={handleNextStep}
@@ -595,8 +610,56 @@ const startCreateNew = () => {
               </motion.div>
             )}
 
-            {/* Step 2: Scoring */}
+            {/* Step 2: Student */}
             {currentStep === 2 && (
+              <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} className="space-y-6">
+                <div className="rounded-lg bg-slate-50 p-4 text-sm"><strong>Round:</strong> {round}</div>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-slate-700">Select Student</label>
+                  <div className="flex items-start gap-2">
+                    <div className="min-w-0 flex-1">
+                      <SearchableSelect
+                        value={selectedStudent}
+                        onChange={setSelectedStudent}
+                        options={students.map((student) => ({ value: student.id, label: `${student.id} - ${student.name}` }))}
+                        placeholder="Search BIB or student name"
+                        required
+                      />
+                    </div>
+                    <button type="button" onClick={() => setScannerMode('student')} aria-label="Scan student BIB QR" title="Scan student BIB QR" className="rounded-lg bg-violet-600 p-3 text-white shadow-md hover:bg-violet-700">
+                      <Camera className="h-5 w-5" />
+                    </button>
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <button type="button" onClick={handlePreviousStep} className="flex-1 rounded-lg bg-slate-500 px-6 py-3 font-semibold text-white hover:bg-slate-600"><ChevronLeft className="mr-2 inline h-5 w-5" />Previous</button>
+                  <button type="button" onClick={handleNextStep} className="flex-1 rounded-lg bg-emerald-600 px-6 py-3 font-semibold text-white hover:bg-emerald-700">Next<ChevronRight className="ml-2 inline h-5 w-5" /></button>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Step 3: Boulder */}
+            {currentStep === 3 && (
+              <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} className="space-y-6">
+                <div className="rounded-lg bg-slate-50 p-4 text-sm"><strong>Round:</strong> {round}<span className="mx-3 text-slate-300">|</span><strong>Student:</strong> {getStudentName(selectedStudent)}</div>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-slate-700">Boulder Number</label>
+                  <div className="flex gap-2">
+                    <input type="number" min="1" value={boulder} onChange={(e) => setBoulder(e.target.value)} placeholder="Enter boulder number" className="min-w-0 flex-1 rounded-lg border border-slate-300 px-4 py-3 focus:ring-2 focus:ring-emerald-500" />
+                    <button type="button" onClick={() => setScannerMode('boulder')} aria-label="Scan boulder QR" title="Scan boulder QR" className="rounded-lg bg-violet-600 p-3 text-white shadow-md hover:bg-violet-700">
+                      <Camera className="h-5 w-5" />
+                    </button>
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <button type="button" onClick={handlePreviousStep} className="flex-1 rounded-lg bg-slate-500 px-6 py-3 font-semibold text-white hover:bg-slate-600"><ChevronLeft className="mr-2 inline h-5 w-5" />Previous</button>
+                  <button type="button" onClick={handleNextStep} className="flex-1 rounded-lg bg-emerald-600 px-6 py-3 font-semibold text-white hover:bg-emerald-700">Next<ChevronRight className="ml-2 inline h-5 w-5" /></button>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Step 4: Scoring */}
+            {currentStep === 4 && (
               <motion.div
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
@@ -637,7 +700,7 @@ const startCreateNew = () => {
                   <div className="pt-3 border-t border-slate-200 text-lg">
                     <span className="font-semibold text-slate-700">Boulder Points:</span>{' '}
                     <span className="font-bold text-blue-600">
-                      {calculateBoulderPoints(at, az).toFixed(1)} / 25.0
+                      {pointDisplay}
                     </span>
                   </div>
                 </div>
@@ -713,8 +776,8 @@ const startCreateNew = () => {
               </motion.div>
             )}
 
-            {/* Step 3: Recorded Scores (Admin/Chief Judge only) */}
-            {currentStep === 3 && canViewScores && (
+            {/* Step 5: Recorded Scores (Admin/Chief Judge only) */}
+            {currentStep === 5 && canViewScores && (
               <motion.div
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
@@ -902,6 +965,14 @@ const startCreateNew = () => {
           </div>
         )}
 
+
+        {scannerMode && (
+          <QrScannerModal
+            title={scannerMode === 'student' ? 'Scan Student BIB' : 'Scan Boulder QR'}
+            onScan={handleQrScan}
+            onClose={() => setScannerMode(null)}
+          />
+        )}
 
         <AnimatePresence>
   {showClashModal && clashLatestScore && (

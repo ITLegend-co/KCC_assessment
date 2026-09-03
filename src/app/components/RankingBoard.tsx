@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Trophy, Medal, Award, Search, Copy, Check, Users, X } from 'lucide-react';
+import { Trophy, Medal, Award, Search, Copy, Check, Users, X, QrCode } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { database } from '../lib/firebase';
 import { ref, onValue } from 'firebase/database';
 import { calculateBoulderPoints } from '../lib/scoring';
+import { QrCodeCard } from './QrCodeCard';
+
+const RANKING_ONLY_URL = 'https://itlegend-co.github.io/KCC_assessment/#/ranking-only';
 
 interface Student {
   id: string;
@@ -29,10 +32,6 @@ interface Score {
 interface RankingEntry {
   id: string;
   name: string;
-  top: number;
-  zone: number;
-  at: number;
-  az: number;
   points: number;
   gender: 'male' | 'female';
   originalRank?: number;
@@ -53,6 +52,7 @@ export function RankingBoard({ showCopyLink = false }: RankingBoardProps) {
   const [ranking, setRanking] = useState<RankingEntry[]>([]);
   const [linkCopied, setLinkCopied] = useState(false);
   const [selectedStudentInfo, setSelectedStudentInfo] = useState<Student | null>(null);
+  const [showRankingQr, setShowRankingQr] = useState(false);
 
   useEffect(() => {
     // Load students from Firebase
@@ -139,25 +139,9 @@ export function RankingBoard({ showCopyLink = false }: RankingBoardProps) {
           summary[s.id] = {
             id: s.id,
             name: student.name,
-            top: 0,
-            zone: 0,
-            at: 0,
-            az: 0,
             points: 0,
             gender: student.gender || 'male',
           };
-        }
-
-        // Count TOP if AT exists
-        if (s.at !== null && s.at !== undefined) {
-          summary[s.id].top += 1;
-          summary[s.id].at += s.at;
-        }
-
-        // Count ZONE if AZ exists
-        if (s.az !== null && s.az !== undefined) {
-          summary[s.id].zone += 1;
-          summary[s.id].az += s.az;
         }
 
         summary[s.id].points = Number(
@@ -245,7 +229,7 @@ export function RankingBoard({ showCopyLink = false }: RankingBoardProps) {
   };
 
   const handleCopyLink = () => {
-    const url = `https://iluvbouldering-hue.github.io/KCC_boulder_ranking/#/ranking-only`;
+    const url = RANKING_ONLY_URL;
     
     // Fallback method that works without Clipboard API
     const textArea = document.createElement('textarea');
@@ -301,8 +285,6 @@ export function RankingBoard({ showCopyLink = false }: RankingBoardProps) {
                 <th className="px-4 py-3 text-left font-bold text-slate-700">BIB</th>
                 <th className="px-4 py-3 text-left font-bold text-slate-700">Name</th>
                 <th className="px-4 py-3 text-center font-bold text-slate-700">Points</th>
-                <th className="px-4 py-3 text-center font-bold text-slate-700">Tops</th>
-                <th className="px-4 py-3 text-center font-bold text-slate-700">Zones</th>
               </tr>
             </thead>
             <tbody>
@@ -392,28 +374,6 @@ export function RankingBoard({ showCopyLink = false }: RankingBoardProps) {
                           {entry.points.toFixed(1)}
                         </motion.span>
                       </td>
-                      <td className="px-4 py-4 text-center">
-                        <motion.span 
-                          className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-emerald-100 text-emerald-700 font-bold"
-                          key={`top-${entry.id}-${entry.top}`}
-                          initial={{ scale: 1 }}
-                          animate={{ scale: [1, 1.2, 1] }}
-                          transition={{ duration: 0.4 }}
-                        >
-                          {entry.top}
-                        </motion.span>
-                      </td>
-                      <td className="px-4 py-4 text-center">
-                        <motion.span 
-                          className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-amber-100 text-amber-700 font-bold"
-                          key={`zone-${entry.id}-${entry.zone}`}
-                          initial={{ scale: 1 }}
-                          animate={{ scale: [1, 1.2, 1] }}
-                          transition={{ duration: 0.4 }}
-                        >
-                          {entry.zone}
-                        </motion.span>
-                      </td>
                     </motion.tr>
                   );
                 })}
@@ -495,10 +455,8 @@ export function RankingBoard({ showCopyLink = false }: RankingBoardProps) {
 
             {/* Copy Link Button */}
             {showCopyLink && (
-              <button
-                onClick={handleCopyLink}
-                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg transition-colors shadow-md"
-              >
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <button onClick={handleCopyLink} className="flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg transition-colors shadow-md">
                 {linkCopied ? (
                   <>
                     <Check className="w-5 h-5" />
@@ -510,7 +468,11 @@ export function RankingBoard({ showCopyLink = false }: RankingBoardProps) {
                     Copy Ranking Link
                   </>
                 )}
-              </button>
+                </button>
+                <button onClick={() => setShowRankingQr(true)} className="flex items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2 font-medium text-white shadow-md hover:bg-violet-700">
+                  <QrCode className="h-5 w-5" /> Generate Ranking QR
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -555,6 +517,18 @@ export function RankingBoard({ showCopyLink = false }: RankingBoardProps) {
           </div>
         </div>
       </div>
+
+      {/* Student Information Modal */}
+      <AnimatePresence>
+        {showRankingQr && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setShowRankingQr(false)}>
+            <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} className="relative w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+              <button onClick={() => setShowRankingQr(false)} className="absolute right-3 top-3 z-10 rounded-lg bg-white p-2 shadow hover:bg-slate-100"><X className="h-5 w-5" /></button>
+              <QrCodeCard value={RANKING_ONLY_URL} title="Student Ranking" subtitle="Scan to view live rankings" fileName="KCC-Student-Ranking" />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Student Information Modal */}
       <AnimatePresence>

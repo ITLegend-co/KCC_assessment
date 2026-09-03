@@ -7,6 +7,7 @@ import StudentRegistration from "./pages/StudentRegistration";
 import JudgeScoring from "./pages/JudgeScoring";
 import Ranking from "./pages/Ranking";
 import RankingOnly from "./pages/RankingOnly";
+import QrGenerator from "./pages/QrGenerator";
 
 export const router = createHashRouter([
   {
@@ -40,6 +41,10 @@ export const router = createHashRouter([
       {
         path: "ranking",
         Component: Ranking,
+      },
+      {
+        path: "qr-generator",
+        Component: QrGenerator,
       },
     ],
   },

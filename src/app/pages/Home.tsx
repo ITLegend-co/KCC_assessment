@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { UserPlus, ClipboardCheck, Trophy, LogOut, Settings } from 'lucide-react';
+import { UserPlus, ClipboardCheck, Trophy, LogOut, Settings, QrCode } from 'lucide-react';
 import { getCurrentUser, logout } from '../lib/auth';
 
 export default function Home() {
@@ -93,6 +93,14 @@ export default function Home() {
           >
             <Trophy className="w-5 h-5" />
             Ranking Board
+          </Link>
+
+          <Link
+            to="/qr-generator"
+            className="flex items-center justify-center gap-3 w-full p-4 bg-violet-600 hover:bg-violet-700 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98]"
+          >
+            <QrCode className="w-5 h-5" />
+            Generate QR Codes
           </Link>
 
           <div className="pt-4 border-t border-slate-200 space-y-3">
