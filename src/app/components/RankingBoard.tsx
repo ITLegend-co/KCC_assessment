@@ -268,23 +268,23 @@ export function RankingBoard({ showCopyLink = false }: RankingBoardProps) {
     const listForRank = fullRankingList || rankingList;
 
     return (
-      <div className="overflow-x-auto -mx-6 md:mx-0">
+      <div className="w-full overflow-x-auto">
         <div className="inline-block min-w-full align-middle">
           {title && (
-            <div className="px-6 py-3 bg-slate-50 border-b-2 border-slate-200">
-              <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+            <div className="px-3 sm:px-6 py-3 bg-slate-50 border-b-2 border-slate-200">
+              <h3 className="text-lg sm:text-xl font-bold text-slate-800 flex items-center gap-2">
                 <Users className="w-5 h-5" />
                 {title}
               </h3>
             </div>
           )}
-          <table className="min-w-full">
+          <table className="w-full table-fixed">
             <thead>
               <tr className="border-b-2 border-slate-200">
-                <th className="px-4 py-3 text-left font-bold text-slate-700">Rank</th>
-                <th className="px-4 py-3 text-left font-bold text-slate-700">BIB</th>
-                <th className="px-4 py-3 text-left font-bold text-slate-700">Name</th>
-                <th className="px-4 py-3 text-center font-bold text-slate-700">Points</th>
+                <th className="w-[4.5rem] px-2 sm:px-4 py-3 text-left text-sm sm:text-base font-bold text-slate-700">Rank</th>
+                <th className="w-[3.75rem] sm:w-[5.5rem] px-1 sm:px-4 py-3 text-left text-sm sm:text-base font-bold text-slate-700">BIB</th>
+                <th className="px-2 sm:px-4 py-3 text-left text-sm sm:text-base font-bold text-slate-700">Name</th>
+                <th className="w-[4.75rem] sm:w-[6.5rem] px-1 sm:px-4 py-3 text-center text-sm sm:text-base font-bold text-slate-700">Points</th>
               </tr>
             </thead>
             <tbody>
@@ -317,15 +317,15 @@ export function RankingBoard({ showCopyLink = false }: RankingBoardProps) {
                           : 'hover:bg-slate-50'
                       }`}
                     >
-                      <td className="px-4 py-4">
+                      <td className="px-2 sm:px-4 py-3 sm:py-4">
                         <motion.div 
-                          className="flex items-center gap-2"
+                          className="flex items-center gap-1 sm:gap-2"
                           layout="position"
                           transition={{ duration: 0.3 }}
                         >
                           <motion.span
                             layout
-                            className={`inline-flex items-center justify-center w-10 h-10 rounded-full font-bold text-lg ${badgeColor} shadow-sm`}
+                            className={`inline-flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-full font-bold text-base sm:text-lg ${badgeColor} shadow-sm shrink-0`}
                             transition={{ duration: 0.3 }}
                           >
                             {rank}
@@ -336,19 +336,19 @@ export function RankingBoard({ showCopyLink = false }: RankingBoardProps) {
                               animate={{ scale: 1, rotate: 0 }}
                               transition={{ duration: 0.4, type: 'spring' }}
                             >
-                              {icon}
+                              <span className="hidden sm:inline-flex">{icon}</span>
                             </motion.div>
                           )}
                         </motion.div>
                       </td>
-                      <td className="px-4 py-4 font-mono text-sm text-slate-600">{entry.id}</td>
-                      <td className="px-4 py-4 font-semibold text-slate-900">
+                      <td className="px-1 sm:px-4 py-3 sm:py-4 font-mono text-xs sm:text-sm text-slate-600 break-words">{entry.id}</td>
+                      <td className="px-2 sm:px-4 py-3 sm:py-4 font-semibold text-sm sm:text-base text-slate-900 min-w-0">
                         <button
                           onClick={() => {
                             const student = students.find((s) => s.id === entry.id);
                             setSelectedStudentInfo(student || null);
                           }}
-                          className="text-left hover:text-emerald-600 hover:underline transition-colors"
+                          className="block w-full text-left leading-snug break-words hover:text-emerald-600 hover:underline transition-colors"
                         >
                           {entry.name}
                         </button>
@@ -363,9 +363,9 @@ export function RankingBoard({ showCopyLink = false }: RankingBoardProps) {
                           </motion.span>
                         )}
                       </td>
-                      <td className="px-4 py-4 text-center">
+                      <td className="px-1 sm:px-4 py-3 sm:py-4 text-center">
                         <motion.span
-                          className="inline-flex items-center justify-center min-w-[4.5rem] h-10 px-3 rounded-lg bg-blue-100 text-blue-700 font-bold"
+                          className="inline-flex items-center justify-center w-full sm:min-w-[4.5rem] h-9 sm:h-10 px-1 sm:px-3 rounded-lg bg-blue-100 text-blue-700 text-sm sm:text-base font-bold"
                           key={`points-${entry.id}-${entry.points}`}
                           initial={{ scale: 1 }}
                           animate={{ scale: [1, 1.2, 1] }}
@@ -387,7 +387,7 @@ export function RankingBoard({ showCopyLink = false }: RankingBoardProps) {
 
   return (
     <>
-      <div className="bg-white rounded-xl shadow-lg p-6 md:p-8 mb-6">
+      <div className="bg-white rounded-xl shadow-lg p-3 sm:p-6 md:p-8 mb-6">
         <div className="flex flex-col gap-4 mb-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <h2 className="text-2xl md:text-3xl font-bold text-slate-900">Student Ranking</h2>
