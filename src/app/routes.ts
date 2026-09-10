@@ -8,19 +8,23 @@ import JudgeScoring from "./pages/JudgeScoring";
 import Ranking from "./pages/Ranking";
 import RankingOnly from "./pages/RankingOnly";
 import QrGenerator from "./pages/QrGenerator";
+import AppError from "./pages/AppError";
 
 export const router = createHashRouter([
   {
     path: "/login",
     Component: Login,
+    ErrorBoundary: AppError,
   },
   {
     path: "/ranking-only",
     Component: RankingOnly,
+    ErrorBoundary: AppError,
   },
   {
     path: "/",
     Component: Root,
+    ErrorBoundary: AppError,
     children: [
       {
         index: true,

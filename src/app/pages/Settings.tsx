@@ -6,6 +6,10 @@ import { ref, get, set, update, remove } from 'firebase/database';
 import { Settings as SettingsIcon, Key, UserPlus, Trash2, Save, ListChecks, Plus, ArrowUp, ArrowDown } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { DEFAULT_ROUNDS, normalizeRounds } from '../lib/rounds';
+import { AssessmentArchives } from '../components/AssessmentArchives';
+import { BoulderNumberingMode, DEFAULT_COMPETITION_SETTINGS } from '../lib/competition';
+import { describeError } from '../lib/appError';
+import { ErrorMessage, LoadingMessage } from '../components/StatusMessage';
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -23,9 +27,14 @@ export default function Settings() {
   const [userError, setUserError] = useState('');
   const [userSuccess, setUserSuccess] = useState('');
   const [rounds, setRounds] = useState<string[]>(DEFAULT_ROUNDS);
+  const [savedRounds, setSavedRounds] = useState<string[]>(DEFAULT_ROUNDS);
   const [newRound, setNewRound] = useState('');
   const [roundError, setRoundError] = useState('');
   const [roundSuccess, setRoundSuccess] = useState('');
+  const [numberingMode, setNumberingMode] = useState<BoulderNumberingMode>('continuous');
+  const [boulderCounts, setBoulderCounts] = useState<Record<string, number>>({});
+  const [isLoading, setIsLoading] = useState(true);
+  const [dataError, setDataError] = useState('');
 
   useEffect(() => {
     if (!currentUser || currentUser.role !== 'administrator') {
@@ -37,6 +46,7 @@ export default function Settings() {
   }, [currentUser, navigate]);
 
   const loadUsers = async () => {
+    try {
     const usersRef = ref(database, 'users');
     const snapshot = await get(usersRef);
 
@@ -48,11 +58,20 @@ export default function Settings() {
       }));
       setUsers(usersList);
     }
+    } catch (error) { const d = describeError(error, 'Unable to load users'); setDataError(`${d.message} — ${d.code}`); }
   };
 
   const loadRounds = async () => {
-    const snapshot = await get(ref(database, 'settings/rounds'));
-    setRounds(snapshot.exists() ? normalizeRounds(snapshot.val()) : DEFAULT_ROUNDS);
+    try {
+    const [roundSnapshot, competitionSnapshot] = await Promise.all([get(ref(database, 'settings/rounds')), get(ref(database, 'settings/competition'))]);
+    const loadedRounds = roundSnapshot.exists() ? normalizeRounds(roundSnapshot.val()) : DEFAULT_ROUNDS;
+    const competition = { ...DEFAULT_COMPETITION_SETTINGS, ...(competitionSnapshot.val() || {}) };
+    setRounds(loadedRounds);
+    setSavedRounds(loadedRounds);
+    setNumberingMode(competition.numberingMode);
+    setBoulderCounts(competition.boulderCounts || {});
+    } catch (error) { const d = describeError(error, 'Unable to load settings'); setDataError(`${d.message} — ${d.code}`); }
+    finally { setIsLoading(false); }
   };
 
   const handleRoundNameChange = (index: number, value: string) => {
@@ -112,11 +131,32 @@ export default function Settings() {
     }
 
     try {
-      await set(ref(database, 'settings/rounds'), cleanedRounds);
+      const scoresSnapshot = await get(ref(database, 'scores'));
+      const settingsSnapshot = await get(ref(database, 'settings/competition/boulderCounts'));
+      const existingCounts = settingsSnapshot.val() || {};
+      const renamed = savedRounds.map((oldName, index) => ({ oldName, newName: cleanedRounds[index] })).filter(({ oldName, newName }) => newName && oldName !== newName && !cleanedRounds.includes(oldName));
+      const updates: Record<string, unknown> = {
+        'settings/rounds': cleanedRounds,
+        'settings/competition/numberingMode': numberingMode,
+      };
+      const nextCounts: Record<string, number> = {};
+      cleanedRounds.forEach((name) => {
+        const oldName = renamed.find((item) => item.newName === name)?.oldName;
+        nextCounts[name] = Math.max(1, Number(boulderCounts[name] ?? existingCounts[name] ?? (oldName ? existingCounts[oldName] : 5)) || 5);
+      });
+      updates['settings/competition/boulderCounts'] = nextCounts;
+      if (scoresSnapshot.exists()) Object.entries(scoresSnapshot.val() as Record<string, { round?: string }>).forEach(([key, score]) => {
+        const match = renamed.find((item) => item.oldName === score.round);
+        if (match) updates[`scores/${key}/round`] = match.newName;
+      });
+      await update(ref(database), updates);
       setRounds(cleanedRounds);
+      setSavedRounds(cleanedRounds);
+      setBoulderCounts(nextCounts);
       setRoundSuccess('Rounds saved successfully');
-    } catch {
-      setRoundError('Failed to save rounds');
+    } catch (error) {
+      const details = describeError(error, 'Failed to save rounds');
+      setRoundError(`${details.message} — ${details.code} — ${details.time}`);
     }
   };
 
@@ -216,19 +256,23 @@ export default function Settings() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 p-4 md:p-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:p-6">
       <div className="max-w-4xl mx-auto">
         <div className="mb-6">
           <BackButton />
         </div>
 
         <div className="bg-white rounded-xl shadow-lg p-6 md:p-8 mb-6">
+          {isLoading && <div className="mb-4"><LoadingMessage text="Loading settings…" /></div>}
+          {dataError && <div className="mb-4"><ErrorMessage message={dataError} /></div>}
           <div className="flex items-center gap-3 mb-6">
             <SettingsIcon className="w-8 h-8 text-slate-700" />
             <h2 className="text-2xl md:text-3xl font-bold text-slate-900">
               Administrator Settings
             </h2>
           </div>
+
+          <AssessmentArchives username={currentUser.username} />
 
           {/* Change Password Section */}
           <div className="border-b border-slate-200 pb-6 mb-6">
@@ -298,16 +342,23 @@ export default function Settings() {
               These rounds will appear in the Judging Panel and Student Ranking. Removing a round does not delete its previous scores.
             </p>
 
+            <fieldset className="mb-5 rounded-xl border border-slate-200 p-4">
+              <legend className="px-2 font-bold text-slate-800">Boulder numbering</legend>
+              <label className="flex min-h-11 items-start gap-3 py-2"><input type="radio" name="numbering" value="continuous" checked={numberingMode === 'continuous'} onChange={() => setNumberingMode('continuous')} className="mt-1 h-5 w-5" /><span><strong>Continuous (Mode B)</strong><span className="block text-sm text-slate-600">Example: Qualifier 1–5, Semi Final 6–9, Final 10–13.</span></span></label>
+              <label className="flex min-h-11 items-start gap-3 py-2"><input type="radio" name="numbering" value="per-round" checked={numberingMode === 'per-round'} onChange={() => setNumberingMode('per-round')} className="mt-1 h-5 w-5" /><span><strong>Restart each round (Mode A)</strong><span className="block text-sm text-slate-600">Example: every round begins with Boulder 1.</span></span></label>
+            </fieldset>
+
             <div className="space-y-3">
               {rounds.map((roundName, index) => (
-                <div key={index} className="flex items-center gap-2">
+                <div key={index} className="flex flex-wrap items-end gap-2 rounded-lg border border-slate-100 p-2 sm:flex-nowrap sm:border-0 sm:p-0">
                   <span className="w-7 text-center text-sm font-semibold text-slate-500">{index + 1}</span>
                   <input
                     value={roundName}
                     onChange={(event) => handleRoundNameChange(index, event.target.value)}
                     aria-label={`Round ${index + 1} name`}
-                    className="min-w-0 flex-1 rounded-lg border border-slate-300 px-4 py-2 focus:ring-2 focus:ring-emerald-500"
+                    className="min-w-0 basis-[calc(100%-2.25rem)] flex-1 rounded-lg border border-slate-300 px-4 py-2 focus:ring-2 focus:ring-emerald-500 sm:basis-auto"
                   />
+                  <label className="w-24 text-xs font-semibold text-slate-600">Boulders<input aria-label={`${roundName} boulder count`} type="number" min="1" max="99" value={boulderCounts[roundName] || 5} onChange={(event) => setBoulderCounts((current) => ({ ...current, [roundName]: Math.max(1, Number(event.target.value)) }))} className="mt-1 w-full rounded-lg border px-2 py-2 text-base" /></label>
                   <button type="button" onClick={() => moveRound(index, -1)} disabled={index === 0} aria-label={`Move ${roundName} up`} className="rounded-lg bg-slate-100 p-2 text-slate-700 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-40">
                     <ArrowUp className="h-5 w-5" />
                   </button>
@@ -426,7 +477,8 @@ export default function Settings() {
           <div>
             <h3 className="text-xl font-bold text-slate-900 mb-4">Existing Users</h3>
 
-            <div className="overflow-x-auto">
+            <div className="space-y-3 sm:hidden">{users.map((user) => <article key={user.key} className="rounded-xl border border-slate-200 p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-bold text-slate-900">{user.username}</p><p className="text-sm capitalize text-slate-600">{user.role.replace('-', ' ')}</p><p className="text-xs text-slate-500">Created {new Date(user.createdAt).toLocaleDateString()}</p></div>{user.username !== 'admin' && <button aria-label={`Delete user ${user.username}`} onClick={() => handleDeleteUser(user.key || '', user.username)} className="flex h-11 w-11 items-center justify-center rounded-lg bg-red-100 text-red-700"><Trash2 className="h-5 w-5" /></button>}</div></article>)}</div>
+            <div className="hidden overflow-x-auto sm:block">
               <table className="w-full">
                 <thead className="bg-slate-100">
                   <tr>

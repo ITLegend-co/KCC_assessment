@@ -3,9 +3,11 @@ import { useNavigate } from 'react-router';
 import { BackButton } from '../components/BackButton';
 import { Save, Edit2, Trash2, ArrowUpDown, QrCode, X } from 'lucide-react';
 import { database } from '../lib/firebase';
-import { ref, push, set, update, remove, onValue } from 'firebase/database';
+import { ref, push, update, onValue, get } from 'firebase/database';
 import { getCurrentUser } from '../lib/auth';
 import { QrCodeCard } from '../components/QrCodeCard';
+import { ErrorMessage, LoadingMessage, OfflineMessage } from '../components/StatusMessage';
+import { describeError } from '../lib/appError';
 
 interface Student {
   id: string;
@@ -51,6 +53,10 @@ export default function StudentRegistration() {
   const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
   const [selectAll, setSelectAll] = useState(false);
   const [qrStudent, setQrStudent] = useState<Student | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [dataError, setDataError] = useState('');
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [actionError, setActionError] = useState('');
 
   // Load students from Firebase with real-time updates
   useEffect(() => {
@@ -70,9 +76,22 @@ export default function StudentRegistration() {
         setStudents([]);
         localStorage.setItem('students', JSON.stringify([]));
       }
+      setIsLoading(false);
+      setDataError('');
+    }, (error) => {
+      setIsLoading(false);
+      setDataError(`${error.message} (${error.code || 'DATABASE_READ_FAILED'})`);
     });
 
     return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const online = () => setIsOnline(true);
+    const offline = () => setIsOnline(false);
+    window.addEventListener('online', online);
+    window.addEventListener('offline', offline);
+    return () => { window.removeEventListener('online', online); window.removeEventListener('offline', offline); };
   }, []);
 
   // Sync selectAll checkbox state with actual selections
@@ -93,18 +112,26 @@ export default function StudentRegistration() {
     (student) => student.gender === gender
   );
 
-  const nextNumber = genderStudents.length + 1;
+  const usedNumbers = new Set(genderStudents.map((student) => Number(student.id.replace(/^[A-Za-z]+/, ''))).filter(Number.isFinite));
+  let nextNumber = 1;
+  while (usedNumbers.has(nextNumber)) nextNumber += 1;
 
   return `${prefix}${String(nextNumber).padStart(2, '0')}`;
 };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    setActionError('');
 
+    try {
     if (editKey !== null) {
       // Update existing student
       const studentRef = ref(database, `students/${editKey}`);
+      const existingStudent = students.find((student) => student.key === editKey);
+      const nextGender = formData.gender as 'male' | 'female';
+      const nextId = existingStudent && existingStudent.gender !== nextGender ? generateID(nextGender) : existingStudent?.id;
       const updatedData = {
+        id: nextId,
         name: formData.name,
         school: formData.school,
         class: formData.class,
@@ -112,7 +139,18 @@ export default function StudentRegistration() {
         gender: formData.gender,
       };
       
-      await update(studentRef, updatedData);
+      if (existingStudent && nextId && nextId !== existingStudent.id) {
+        const scoresSnapshot = await get(ref(database, 'scores'));
+        const updates: Record<string, unknown> = { [`students/${editKey}`]: updatedData };
+        if (scoresSnapshot.exists()) {
+          Object.entries(scoresSnapshot.val() as Record<string, { id?: string }>).forEach(([key, score]) => {
+            if (score.id === existingStudent.id) updates[`scores/${key}/id`] = nextId;
+          });
+        }
+        await update(ref(database), updates);
+      } else {
+        await update(studentRef, updatedData);
+      }
       setEditKey(null);
     } else {
       // Add new student
@@ -130,6 +168,10 @@ export default function StudentRegistration() {
     }
 
     setFormData({ name: '', school: '', class: '', age: '', gender: '' });
+    } catch (error) {
+      const details = describeError(error, 'Student could not be saved');
+      setActionError(`${details.message} — ${details.code} — ${details.time}`);
+    }
   };
 
   const handleEdit = (student: Student) => {
@@ -146,8 +188,20 @@ export default function StudentRegistration() {
 
   const handleDelete = async (key: string) => {
     if (window.confirm('Delete this student?')) {
-      const studentRef = ref(database, `students/${key}`);
-      await remove(studentRef);
+      try {
+        const student = students.find((item) => item.key === key);
+        const scoresSnapshot = await get(ref(database, 'scores'));
+        const updates: Record<string, null> = { [`students/${key}`]: null };
+        if (student && scoresSnapshot.exists()) {
+          Object.entries(scoresSnapshot.val() as Record<string, { id?: string }>).forEach(([scoreKey, score]) => {
+            if (score.id === student.id) updates[`scores/${scoreKey}`] = null;
+          });
+        }
+        await update(ref(database), updates);
+      } catch (error) {
+        const details = describeError(error, 'Student could not be deleted');
+        setActionError(`${details.message} — ${details.code} — ${details.time}`);
+      }
     }
   };
 
@@ -186,11 +240,14 @@ export default function StudentRegistration() {
     }
 
     if (window.confirm(`Delete ${selectedStudents.size} selected student${selectedStudents.size > 1 ? 's' : ''}?`)) {
-      const promises = Array.from(selectedStudents).map((key) => {
-        const studentRef = ref(database, `students/${key}`);
-        return remove(studentRef);
+      const selectedIds = new Set(students.filter((student) => selectedStudents.has(student.key!)).map((student) => student.id));
+      const scoresSnapshot = await get(ref(database, 'scores'));
+      const updates: Record<string, null> = {};
+      selectedStudents.forEach((key) => { updates[`students/${key}`] = null; });
+      if (scoresSnapshot.exists()) Object.entries(scoresSnapshot.val() as Record<string, { id?: string }>).forEach(([scoreKey, score]) => {
+        if (score.id && selectedIds.has(score.id)) updates[`scores/${scoreKey}`] = null;
       });
-      await Promise.all(promises);
+      await update(ref(database), updates);
       setSelectedStudents(new Set());
       setSelectAll(false);
     }
@@ -203,18 +260,22 @@ export default function StudentRegistration() {
     }
 
     if (window.confirm(`Delete ALL ${students.length} students? This action cannot be undone!`)) {
-      const studentsRef = ref(database, 'students');
-      await remove(studentsRef);
+      await update(ref(database), { students: null, scores: null });
       setSelectedStudents(new Set());
       setSelectAll(false);
     }
   };
 
   const sortedStudents = [...students].sort((a, b) => {
-    if (sortField === 'id' || sortField === 'age') {
+    if (sortField === 'id') {
       return sortDirection === 'asc'
-        ? (a[sortField] as number) - (b[sortField] as number)
-        : (b[sortField] as number) - (a[sortField] as number);
+        ? a.id.localeCompare(b.id, undefined, { numeric: true })
+        : b.id.localeCompare(a.id, undefined, { numeric: true });
+    }
+    if (sortField === 'age') {
+      return sortDirection === 'asc'
+        ? Number(a.age) - Number(b.age)
+        : Number(b.age) - Number(a.age);
     } else {
       return sortDirection === 'asc'
         ? (a[sortField] as string).localeCompare(b[sortField] as string)
@@ -223,18 +284,20 @@ export default function StudentRegistration() {
   });
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 p-4 md:p-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:p-6">
       <div className="max-w-4xl mx-auto">
         <div className="mb-6">
           <BackButton />
         </div>
 
-        <div className="bg-white rounded-xl shadow-lg p-6 md:p-8 mb-6">
+        {!isOnline && <div className="mb-4"><OfflineMessage /></div>}
+        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 md:p-8 mb-6">
           <h2 className="text-2xl md:text-3xl font-bold text-slate-900 mb-6">
             Student Contestant Registration
           </h2>
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            {actionError && <ErrorMessage message={actionError} />}
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-2">
                 Name
@@ -326,7 +389,19 @@ export default function StudentRegistration() {
         </div>
 
         <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-          <div className="overflow-x-auto">
+          {isLoading ? <div className="p-4"><LoadingMessage text="Loading students…" /></div> : dataError ? <div className="p-4"><ErrorMessage message={dataError} /></div> : null}
+          {!isLoading && !dataError && <div className="space-y-3 p-3 sm:hidden">
+            {sortedStudents.map((student) => <article key={student.key} className="rounded-xl border border-slate-200 p-4 shadow-sm">
+              <div className="flex items-start justify-between gap-3"><div><p className="text-lg font-bold text-slate-900">{student.id}</p><p className="font-semibold text-slate-800">{student.name}</p><p className="text-sm text-slate-500">{student.school} · {student.class}</p></div><input aria-label={`Select ${student.name}`} type="checkbox" checked={selectedStudents.has(student.key!)} onChange={() => handleSelect(student.key!)} className="h-5 w-5" /></div>
+              <div className="mt-4 grid grid-cols-3 gap-2">
+                <button aria-label={`Generate QR for BIB ${student.id}`} onClick={() => setQrStudent(student)} className="flex min-h-11 items-center justify-center rounded-lg bg-violet-100 text-violet-700"><QrCode className="h-5 w-5" /></button>
+                <button aria-label={`Edit ${student.name}`} onClick={() => handleEdit(student)} className="flex min-h-11 items-center justify-center rounded-lg bg-amber-100 text-amber-700"><Edit2 className="h-5 w-5" /></button>
+                <button aria-label={`Delete ${student.name}`} onClick={() => handleDelete(student.key!)} className="flex min-h-11 items-center justify-center rounded-lg bg-red-100 text-red-700"><Trash2 className="h-5 w-5" /></button>
+              </div>
+            </article>)}
+            {sortedStudents.length === 0 && <p className="py-8 text-center text-slate-500">No students registered yet</p>}
+          </div>}
+          <div className="hidden overflow-x-auto sm:block">
             <table className="w-full">
               <thead className="bg-slate-100">
                 <tr>

@@ -5,11 +5,14 @@ import { SearchableSelect } from '../components/SearchableSelect';
 import { Save, Trash2, Undo2, ChevronRight, ChevronLeft, History, X as CloseIcon, Camera } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { database } from '../lib/firebase';
-import { ref, push, onValue, remove } from 'firebase/database';
+import { ref, push, onValue, remove, runTransaction } from 'firebase/database';
 import { getCurrentUser } from '../lib/auth';
 import { calculateBoulderPoints } from '../lib/scoring';
 import { QrScannerModal } from '../components/QrScannerModal';
 import { useRounds } from '../hooks/useRounds';
+import { getBoulderRange, useCompetitionSettings } from '../lib/competition';
+import { ErrorMessage, LoadingMessage, OfflineMessage } from '../components/StatusMessage';
+import { describeError } from '../lib/appError';
 
 interface Student {
   id: string;
@@ -37,6 +40,7 @@ export default function JudgeScoring() {
   const navigate = useNavigate();
   const currentUser = getCurrentUser();
   const rounds = useRounds();
+  const { settings: competitionSettings, loading: settingsLoading, error: settingsError } = useCompetitionSettings();
   const canViewScores = currentUser?.role === 'administrator' || currentUser?.role === 'chief-judge';
 
   useEffect(() => {
@@ -71,6 +75,11 @@ const [scoreSortBy, setScoreSortBy] = useState<'name' | 'id' | 'round' | 'boulde
 const [scoreSortOrder, setScoreSortOrder] = useState<'asc' | 'desc'>('asc');
   const [isEditingLatest, setIsEditingLatest] = useState(false);
   const [scannerMode, setScannerMode] = useState<'student' | 'boulder' | null>(null);
+  const [studentsLoading, setStudentsLoading] = useState(true);
+  const [scoresLoading, setScoresLoading] = useState(true);
+  const [dataError, setDataError] = useState('');
+  const [actionError, setActionError] = useState('');
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   // Multi-step state
   const [currentStep, setCurrentStep] = useState(1);
@@ -101,7 +110,8 @@ const [scoreSortOrder, setScoreSortOrder] = useState<'asc' | 'desc'>('asc');
       } else {
         setStudents([]);
       }
-    });
+      setStudentsLoading(false);
+    }, (error) => { setStudentsLoading(false); setDataError(`${error.message} (${error.code || 'STUDENT_READ_FAILED'})`); });
 
     // Load scores from Firebase
     const scoresRef = ref(database, 'scores');
@@ -117,12 +127,21 @@ const [scoreSortOrder, setScoreSortOrder] = useState<'asc' | 'desc'>('asc');
       } else {
         setScores([]);
       }
-    });
+      setScoresLoading(false);
+    }, (error) => { setScoresLoading(false); setDataError(`${error.message} (${error.code || 'SCORE_READ_FAILED'})`); });
 
     return () => {
       unsubscribeStudents();
       unsubscribeScores();
     };
+  }, []);
+
+  useEffect(() => {
+    const online = () => setIsOnline(true);
+    const offline = () => setIsOnline(false);
+    window.addEventListener('online', online);
+    window.addEventListener('offline', offline);
+    return () => { window.removeEventListener('online', online); window.removeEventListener('offline', offline); };
   }, []);
 
   useEffect(() => {
@@ -270,6 +289,7 @@ const [scoreSortOrder, setScoreSortOrder] = useState<'asc' | 'desc'>('asc');
 
   const handleSubmit = async (e: FormEvent) => {
   e.preventDefault();
+  setActionError('');
 
   try {
     const existingVersions = scores.filter(
@@ -279,10 +299,10 @@ const [scoreSortOrder, setScoreSortOrder] = useState<'asc' | 'desc'>('asc');
         s.boulder === Number(boulder)
     );
 
-    const nextVersion =
-      existingVersions.length > 0
-        ? Math.max(...existingVersions.map((s) => s.version || 0)) + 1
-        : 1;
+    const currentHighest = existingVersions.length > 0 ? Math.max(...existingVersions.map((s) => s.version || 0)) : 0;
+    const lockKey = encodeURIComponent(`${selectedStudent}|${round}|${Number(boulder)}`).replace(/\./g, '%2E');
+    const versionResult = await runTransaction(ref(database, `scoreVersions/${lockKey}`), (current) => Math.max(Number(current) || 0, currentHighest) + 1);
+    const nextVersion = Number(versionResult.snapshot.val());
 
     const newScore = {
       id: selectedStudent,
@@ -307,7 +327,8 @@ const [scoreSortOrder, setScoreSortOrder] = useState<'asc' | 'desc'>('asc');
     }
   } catch (error) {
     console.error('Failed to save score:', error);
-    alert('Failed to save score. Please try again.');
+    const details = describeError(error, 'Failed to save score');
+    setActionError(`${details.message} — ${details.code} — ${details.time}`);
   }
 };
 
@@ -319,6 +340,20 @@ const [scoreSortOrder, setScoreSortOrder] = useState<'asc' | 'desc'>('asc');
   setIsEditingLatest(false);
   resetAttempts();
 };
+
+  const scoreNextStudent = () => {
+    setSelectedStudent('');
+    setCurrentStep(2);
+    setIsEditingLatest(false);
+    resetAttempts();
+  };
+
+  const scoreNextBoulder = () => {
+    setBoulder('');
+    setCurrentStep(3);
+    setIsEditingLatest(false);
+    resetAttempts();
+  };
 
   const getStudentName = (id: string) => {
     const student = students.find((s) => s.id === id);
@@ -450,9 +485,10 @@ const startCreateNew = () => {
 };
   
   const handleNextStep = () => {
+  setActionError('');
   if (currentStep === 1) {
     if (!round) {
-      alert('Please select a round');
+      setActionError('Please select a round.');
       return;
     }
     setCurrentStep(2);
@@ -461,7 +497,7 @@ const startCreateNew = () => {
 
   if (currentStep === 2) {
     if (!selectedStudent) {
-      alert('Please select or scan a student');
+      setActionError('Please select or scan a student.');
       return;
     }
     setCurrentStep(3);
@@ -469,8 +505,9 @@ const startCreateNew = () => {
   }
 
   if (currentStep === 3) {
-    if (!boulder || Number(boulder) < 1) {
-      alert('Please enter or scan a valid boulder number');
+    const range = getBoulderRange(rounds, round, competitionSettings);
+    if (!boulder || Number(boulder) < range.start || Number(boulder) > range.end) {
+      setActionError(`Please enter a boulder number from ${range.start} to ${range.end} for ${round}.`);
       return;
     }
 
@@ -505,7 +542,7 @@ const startCreateNew = () => {
         : rawValue.trim();
       const student = students.find((item) => item.id.toLowerCase() === scannedBib.toLowerCase());
       if (!student) {
-        alert(`No student found for BIB: ${scannedBib}`);
+        setActionError(`No student found for BIB: ${scannedBib}`);
         setScannerMode(null);
         return;
       }
@@ -516,8 +553,9 @@ const startCreateNew = () => {
       const scannedBoulder = rawValue.startsWith('KCC:BOULDER:')
         ? rawValue.slice('KCC:BOULDER:'.length).trim()
         : rawValue.trim();
-      if (!/^\d+$/.test(scannedBoulder) || Number(scannedBoulder) < 1) {
-        alert('This is not a valid boulder QR code.');
+      const range = getBoulderRange(rounds, round, competitionSettings);
+      if (!/^\d+$/.test(scannedBoulder) || Number(scannedBoulder) < range.start || Number(scannedBoulder) > range.end) {
+        setActionError(`This boulder is not valid for ${round}. Use Boulder ${range.start}–${range.end}.`);
         setScannerMode(null);
         return;
       }
@@ -544,13 +582,17 @@ const startCreateNew = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 p-4 md:p-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:p-6">
       <div className="max-w-4xl mx-auto">
         <div className="mb-6">
           <BackButton />
         </div>
 
+        {!isOnline && <div className="mb-4"><OfflineMessage /></div>}
+        {(studentsLoading || scoresLoading || settingsLoading) && <div className="mb-4"><LoadingMessage text="Loading judging data…" /></div>}
+        {(dataError || settingsError) && <div className="mb-4"><ErrorMessage message={dataError || settingsError} /></div>}
         <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 md:p-8 mb-6">
+          {actionError && <div className="mb-4"><ErrorMessage message={actionError} /></div>}
           <h2 className="text-2xl md:text-3xl font-bold text-slate-900 mb-6">
             Judge Scoring – Student Category
           </h2>
@@ -647,7 +689,7 @@ const startCreateNew = () => {
                 <div>
                   <label className="mb-2 block text-sm font-semibold text-slate-700">Boulder Number</label>
                   <div className="flex gap-2">
-                    <input type="number" min="1" value={boulder} onChange={(e) => setBoulder(e.target.value)} placeholder="Enter boulder number" className="min-w-0 flex-1 rounded-lg border border-slate-300 px-4 py-3 focus:ring-2 focus:ring-emerald-500" />
+                    <input type="number" min={getBoulderRange(rounds, round, competitionSettings).start} max={getBoulderRange(rounds, round, competitionSettings).end} value={boulder} onChange={(e) => setBoulder(e.target.value)} placeholder={`Boulder ${getBoulderRange(rounds, round, competitionSettings).start}–${getBoulderRange(rounds, round, competitionSettings).end}`} className="min-w-0 flex-1 rounded-lg border border-slate-300 px-4 py-3 focus:ring-2 focus:ring-emerald-500" />
                     <button type="button" onClick={() => setScannerMode('boulder')} aria-label="Scan boulder QR" title="Scan boulder QR" className="rounded-lg bg-violet-600 p-3 text-white shadow-md hover:bg-violet-700">
                       <Camera className="h-5 w-5" />
                     </button>
@@ -792,13 +834,25 @@ const startCreateNew = () => {
                   </p>
                 </div>
 
+                <div className="grid gap-3 sm:grid-cols-3">
+                <button
+                  type="button"
+                  onClick={scoreNextStudent}
+                  className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-3 font-semibold text-white"
+                >Keep Round + Boulder<br />Next Student</button>
+                <button
+                  type="button"
+                  onClick={scoreNextBoulder}
+                  className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-3 font-semibold text-white"
+                >Keep Round + Student<br />Next Boulder</button>
                 <button
                   type="button"
                   onClick={resetForm}
-                  className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg transition-colors shadow-md hover:shadow-lg"
+                  className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-3 font-semibold text-white"
                 >
-                  Score Another Student
+                  Start New Selection
                 </button>
+                </div>
               </motion.div>
             )}
           </form>
@@ -857,7 +911,18 @@ const startCreateNew = () => {
               </div>
             )}
 
-            <div className="overflow-x-auto">
+            <div className="space-y-3 p-3 sm:hidden">
+              {getFilteredAndSortedScores().map((score) => {
+                const comboKey = JSON.stringify({ id: score.id, round: score.round, boulder: score.boulder });
+                return <article key={comboKey} className="rounded-xl border border-slate-200 p-4">
+                  <div className="flex items-start justify-between gap-3"><div><p className="font-bold">{score.id} · {getStudentName(score.id)}</p><p className="text-sm text-slate-600">{score.round} · Boulder {score.boulder}</p></div><input aria-label={`Select score for ${score.id}`} type="checkbox" checked={selectedScores.has(comboKey)} onChange={() => handleSelectScore(comboKey)} className="h-5 w-5" /></div>
+                  <div className="mt-3 grid grid-cols-3 gap-2 text-center text-sm"><div className="rounded-lg bg-emerald-50 p-2"><span className="block text-xs text-slate-500">AT</span><strong>{score.at ?? '-'}</strong></div><div className="rounded-lg bg-amber-50 p-2"><span className="block text-xs text-slate-500">AZ</span><strong>{score.az ?? '-'}</strong></div><div className="rounded-lg bg-blue-50 p-2"><span className="block text-xs text-slate-500">Points</span><strong>{calculateBoulderPoints(score.at, score.az).toFixed(1)}</strong></div></div>
+                  {hasEditHistory(score.id, score.round, score.boulder) && <button onClick={() => handleShowHistory(score.id, score.round, score.boulder)} className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-blue-100 font-semibold text-blue-700"><History className="h-4 w-4" />View History</button>}
+                </article>;
+              })}
+              {getFilteredAndSortedScores().length === 0 && <p className="py-8 text-center text-slate-500">No scores recorded yet</p>}
+            </div>
+            <div className="hidden overflow-x-auto sm:block">
               <table className="w-full">
                 <thead className="bg-slate-100">
                   <tr>
@@ -988,9 +1053,12 @@ const startCreateNew = () => {
         initial={{ scale: 0.9, y: 20 }}
         animate={{ scale: 1, y: 0 }}
         exit={{ scale: 0.9, y: 20 }}
-        className="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="existing-score-title"
+        className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-xl bg-white p-5 shadow-2xl sm:p-6"
       >
-        <h3 className="text-xl font-bold text-slate-900 mb-3">
+        <h3 id="existing-score-title" className="text-xl font-bold text-slate-900 mb-3">
           Existing Score Found
         </h3>
 
@@ -1052,17 +1120,21 @@ const startCreateNew = () => {
                 initial={{ scale: 0.9, y: 20 }}
                 animate={{ scale: 1, y: 0 }}
                 exit={{ scale: 0.9, y: 20 }}
-                className="bg-white rounded-xl shadow-2xl p-6 md:p-8 max-w-2xl w-full max-h-[80vh] overflow-y-auto"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="score-history-title"
+                className="max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-5 shadow-2xl sm:p-6 md:p-8"
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center gap-2">
                     <History className="w-6 h-6 text-blue-600" />
-                    <h3 className="text-2xl font-bold text-slate-900">Score History</h3>
+                    <h3 id="score-history-title" className="text-2xl font-bold text-slate-900">Score History</h3>
                   </div>
                   <button
                     onClick={() => setShowHistoryModal(false)}
-                    className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                    aria-label="Close score history"
+                    className="flex h-11 w-11 items-center justify-center rounded-lg hover:bg-slate-100 transition-colors"
                   >
                     <CloseIcon className="w-5 h-5 text-slate-500" />
                   </button>

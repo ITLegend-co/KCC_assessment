@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, type KeyboardEvent } from 'react';
 import { ChevronDown, Search } from 'lucide-react';
 
 interface SearchableSelectProps {
@@ -18,6 +18,7 @@ export function SearchableSelect({
 }: SearchableSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeIndex, setActiveIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -51,12 +52,28 @@ export function SearchableSelect({
     setSearchQuery('');
   };
 
+  const handleKeyDown = (event: KeyboardEvent) => {
+    if (event.key === 'Escape') { setIsOpen(false); setSearchQuery(''); return; }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      if (!isOpen) { setIsOpen(true); return; }
+      const direction = event.key === 'ArrowDown' ? 1 : -1;
+      setActiveIndex((current) => Math.max(0, Math.min(filteredOptions.length - 1, current + direction)));
+    }
+    if (event.key === 'Enter' && isOpen && filteredOptions[activeIndex]) {
+      event.preventDefault(); handleSelect(filteredOptions[activeIndex].value);
+    }
+  };
+
   return (
     <div ref={containerRef} className="relative">
       {/* Selected value display */}
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
+        onKeyDown={handleKeyDown}
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
         className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-white text-left flex items-center justify-between"
       >
         <span className={value ? 'text-slate-900' : 'text-slate-500'}>
@@ -82,25 +99,29 @@ export function SearchableSelect({
                 placeholder="Type to search..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={handleKeyDown}
                 className="w-full pl-10 pr-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm"
               />
             </div>
           </div>
 
           {/* Options list */}
-          <div className="overflow-y-auto">
+          <div className="overflow-y-auto" role="listbox" aria-label="Available options">
             {filteredOptions.length === 0 ? (
               <div className="px-4 py-3 text-center text-slate-500 text-sm">
                 No results found
               </div>
             ) : (
-              filteredOptions.map((option) => (
+              filteredOptions.map((option, index) => (
                 <button
                   key={option.value}
                   type="button"
                   onClick={() => handleSelect(option.value)}
+                  onMouseEnter={() => setActiveIndex(index)}
+                  role="option"
+                  aria-selected={option.value === value}
                   className={`w-full px-4 py-2 text-left hover:bg-emerald-50 transition-colors ${
-                    option.value === value ? 'bg-emerald-100 font-semibold' : ''
+                    option.value === value || index === activeIndex ? 'bg-emerald-100 font-semibold' : ''
                   }`}
                 >
                   {option.label}

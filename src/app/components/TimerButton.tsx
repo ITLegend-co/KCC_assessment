@@ -243,7 +243,7 @@ const buzzerAudio = useRef<HTMLAudioElement | null>(null);
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.9 }}
           onClick={() => setShowTimer(true)}
-          className="fixed bottom-6 right-6 z-40 w-16 h-16 bg-gradient-to-br from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white rounded-full shadow-2xl flex items-center justify-center transition-all duration-300 hover:shadow-purple-500/50"
+          className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-purple-600 to-purple-700 text-white shadow-2xl transition-all duration-300 hover:from-purple-700 hover:to-purple-800 hover:shadow-purple-500/50 sm:bottom-6 sm:right-6 sm:h-16 sm:w-16"
           title="Competition Timer"
         >
           <Timer className="w-8 h-8" />

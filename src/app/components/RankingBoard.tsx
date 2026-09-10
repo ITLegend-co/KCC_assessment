@@ -6,6 +6,8 @@ import { ref, onValue } from 'firebase/database';
 import { calculateBoulderPoints } from '../lib/scoring';
 import { QrCodeCard } from './QrCodeCard';
 import { useRounds } from '../hooks/useRounds';
+import { getBoulderRange, useCompetitionSettings } from '../lib/competition';
+import { ErrorMessage, LoadingMessage } from './StatusMessage';
 
 const RANKING_ONLY_URL = 'https://itlegend-co.github.io/KCC_assessment/#/ranking-only';
 
@@ -55,6 +57,10 @@ export function RankingBoard({ showCopyLink = false }: RankingBoardProps) {
   const [selectedStudentInfo, setSelectedStudentInfo] = useState<Student | null>(null);
   const [showRankingQr, setShowRankingQr] = useState(false);
   const rounds = useRounds();
+  const { settings: competitionSettings, loading: settingsLoading, error: settingsError } = useCompetitionSettings();
+  const [studentsLoading, setStudentsLoading] = useState(true);
+  const [scoresLoading, setScoresLoading] = useState(true);
+  const [dataError, setDataError] = useState('');
 
   useEffect(() => {
     if (!rounds.includes(selectedRound)) {
@@ -77,7 +83,8 @@ export function RankingBoard({ showCopyLink = false }: RankingBoardProps) {
       } else {
         setStudents([]);
       }
-    });
+      setStudentsLoading(false);
+    }, (error) => { setStudentsLoading(false); setDataError(`${error.message} (${error.code || 'STUDENT_READ_FAILED'})`); });
 
     // Load scores from Firebase
     const scoresRef = ref(database, 'scores');
@@ -93,7 +100,8 @@ export function RankingBoard({ showCopyLink = false }: RankingBoardProps) {
       } else {
         setScores([]);
       }
-    });
+      setScoresLoading(false);
+    }, (error) => { setScoresLoading(false); setDataError(`${error.message} (${error.code || 'SCORE_READ_FAILED'})`); });
 
     return () => {
       unsubscribeStudents();
@@ -396,6 +404,8 @@ export function RankingBoard({ showCopyLink = false }: RankingBoardProps) {
   return (
     <>
       <div className="bg-white rounded-xl shadow-lg p-3 sm:p-6 md:p-8 mb-6">
+        {(studentsLoading || scoresLoading || settingsLoading) && <div className="mb-4"><LoadingMessage text="Loading rankings…" /></div>}
+        {(dataError || settingsError) && <div className="mb-4"><ErrorMessage message={dataError || settingsError} /></div>}
         <div className="flex flex-col gap-4 mb-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <h2 className="text-2xl md:text-3xl font-bold text-slate-900">Student Ranking</h2>
@@ -521,7 +531,7 @@ export function RankingBoard({ showCopyLink = false }: RankingBoardProps) {
           </div>
           <div className="flex items-center gap-2">
             <span className="font-semibold">Maximum:</span>
-            <span>125.0 for 5 boulders; 150.0 for 6</span>
+            <span>{(getBoulderRange(rounds, selectedRound, competitionSettings).count * 25).toFixed(1)} for {getBoulderRange(rounds, selectedRound, competitionSettings).count} boulders</span>
           </div>
         </div>
       </div>
@@ -529,9 +539,9 @@ export function RankingBoard({ showCopyLink = false }: RankingBoardProps) {
       {/* Student Information Modal */}
       <AnimatePresence>
         {showRankingQr && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setShowRankingQr(false)}>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} role="dialog" aria-modal="true" aria-label="Ranking QR code" className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setShowRankingQr(false)}>
             <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} className="relative w-full max-w-md" onClick={(e) => e.stopPropagation()}>
-              <button onClick={() => setShowRankingQr(false)} className="absolute right-3 top-3 z-10 rounded-lg bg-white p-2 shadow hover:bg-slate-100"><X className="h-5 w-5" /></button>
+              <button aria-label="Close ranking QR" onClick={() => setShowRankingQr(false)} className="absolute right-3 top-3 z-10 flex h-11 w-11 items-center justify-center rounded-lg bg-white shadow hover:bg-slate-100"><X className="h-5 w-5" /></button>
               <QrCodeCard value={RANKING_ONLY_URL} title="Student Ranking" subtitle="Scan to view live rankings" fileName="KCC-Student-Ranking" />
             </motion.div>
           </motion.div>
@@ -552,11 +562,14 @@ export function RankingBoard({ showCopyLink = false }: RankingBoardProps) {
               initial={{ scale: 0.9, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.9, y: 20 }}
-              className="bg-white rounded-xl shadow-2xl p-6 md:p-8 max-w-md w-full"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="student-info-title"
+              className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-xl bg-white p-5 shadow-2xl sm:p-6 md:p-8"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-start justify-between mb-6">
-                <h3 className="text-2xl font-bold text-slate-900">Student Information</h3>
+                <h3 id="student-info-title" className="text-2xl font-bold text-slate-900">Student Information</h3>
                 <button
                   onClick={() => setSelectedStudentInfo(null)}
                   className="p-2 hover:bg-slate-100 rounded-lg transition-colors"

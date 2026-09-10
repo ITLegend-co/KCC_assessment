@@ -34,14 +34,14 @@ export default function Home() {
   const canAccessSettings = currentUser.role === 'administrator';
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl p-8 md:p-12 w-full max-w-md">
+    <div className="min-h-screen bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 flex items-start justify-center p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:items-center">
+      <div className="bg-white rounded-2xl shadow-2xl p-5 sm:p-8 md:p-12 w-full max-w-md">
         <div className="text-center mb-8">
           <h1 className="text-3xl md:text-4xl font-bold text-slate-900 mb-2">
             Bouldering System
           </h1>
           <p className="text-slate-600">Competition Management</p>
-          <div className="mt-4 inline-flex items-center px-4 py-2 bg-slate-100 rounded-lg">
+          <div className="mt-4 inline-flex max-w-full flex-wrap items-center justify-center px-3 py-2 bg-slate-100 rounded-lg">
             <span className="text-sm text-slate-600">Logged in as:</span>
             <span className="ml-2 font-semibold text-slate-900">{currentUser.username}</span>
             <span
@@ -124,9 +124,6 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="mt-8 pt-8 border-t border-slate-200 text-center text-sm text-slate-500">
-          <p></p>
-        </div>
       </div>
     </div>
   );

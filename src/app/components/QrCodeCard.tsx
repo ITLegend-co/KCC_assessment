@@ -12,6 +12,7 @@ interface QrCodeCardProps {
 
 export function QrCodeCard({ value, title, subtitle, fileName, prominentSubtitle = false }: QrCodeCardProps) {
   const [dataUrl, setDataUrl] = useState('');
+  const [printError, setPrintError] = useState('');
 
   useEffect(() => {
     if (!value) {
@@ -32,8 +33,9 @@ export function QrCodeCard({ value, title, subtitle, fileName, prominentSubtitle
 
   const handlePrint = () => {
     if (!dataUrl) return;
+    setPrintError('');
     const printWindow = window.open('', '_blank', 'width=700,height=700');
-    if (!printWindow) return;
+    if (!printWindow) { setPrintError('Printing was blocked by the browser. Download the QR image instead.'); return; }
     const escapeHtml = (text: string) => text.replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character] || character);
     const subtitleSize = prominentSubtitle ? '52px' : '20px';
     const qrWidth = prominentSubtitle ? '340px' : '420px';
@@ -44,15 +46,16 @@ export function QrCodeCard({ value, title, subtitle, fileName, prominentSubtitle
   if (!dataUrl) return null;
 
   return (
-    <div className="rounded-xl border-2 border-slate-200 bg-white p-5 text-center shadow-sm">
+    <div className="max-h-[90dvh] overflow-y-auto rounded-xl border-2 border-slate-200 bg-white p-4 text-center shadow-sm sm:p-5">
       <h3 className="text-xl font-bold text-slate-900">{title}</h3>
-      {subtitle && <p className={prominentSubtitle ? 'mt-2 text-5xl font-extrabold tracking-wide text-slate-900' : 'mt-1 text-slate-600'}>{subtitle}</p>}
-      <img src={dataUrl} alt={`${title} QR code`} className={`mx-auto my-4 w-full ${prominentSubtitle ? 'max-w-56' : 'max-w-72'}`} />
-      <div className="grid grid-cols-2 gap-3">
-        <button type="button" onClick={handleDownload} className="flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-3 font-semibold text-white hover:bg-blue-700">
+      {subtitle && <p className={prominentSubtitle ? 'mt-2 break-all text-4xl font-extrabold tracking-wide text-slate-900 sm:text-5xl' : 'mt-1 break-words text-slate-600'}>{subtitle}</p>}
+      <img src={dataUrl} alt={`${title} QR code`} className={`mx-auto my-3 w-full ${prominentSubtitle ? 'max-w-48 sm:max-w-56' : 'max-w-64 sm:max-w-72'}`} />
+      {printError && <p role="alert" className="mb-3 rounded-lg bg-amber-50 p-2 text-sm text-amber-800">{printError}</p>}
+      <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2">
+        <button type="button" onClick={handleDownload} className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-3 font-semibold text-white hover:bg-blue-700">
           <Download className="h-5 w-5" /> Download
         </button>
-        <button type="button" onClick={handlePrint} className="flex items-center justify-center gap-2 rounded-lg bg-slate-700 px-4 py-3 font-semibold text-white hover:bg-slate-800">
+        <button type="button" onClick={handlePrint} className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-slate-700 px-3 py-3 font-semibold text-white hover:bg-slate-800">
           <Printer className="h-5 w-5" /> Print
         </button>
       </div>
