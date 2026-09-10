@@ -550,25 +550,25 @@ const startCreateNew = () => {
           <BackButton />
         </div>
 
-        <div className="bg-white rounded-xl shadow-lg p-6 md:p-8 mb-6">
+        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 md:p-8 mb-6">
           <h2 className="text-2xl md:text-3xl font-bold text-slate-900 mb-6">
             Judge Scoring – Student Category
           </h2>
 
           {/* Step Indicator */}
           <div className="mb-6">
-            <div className="flex items-start justify-center overflow-x-auto pb-2">
-              {(canViewScores ? ['Round', 'Student', 'Boulder', 'Scoring', 'Records'] : ['Round', 'Student', 'Boulder', 'Scoring']).map((label, index, steps) => {
+            <div className="flex w-full items-start pb-2">
+              {(canViewScores ? ['Round', 'Student', 'Boulder', 'Scoring', 'Records'] : ['Round', 'Student', 'Boulder', 'Scoring']).map((label, index) => {
                 const step = index + 1;
                 return (
-                  <div key={label} className="flex items-start">
-                    <div className="flex w-16 flex-col items-center sm:w-20">
-                      <div className={`flex h-9 w-9 items-center justify-center rounded-full font-bold ${currentStep >= step ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                  <div key={label} className="relative flex min-w-0 flex-1 flex-col items-center">
+                    {index > 0 && (
+                      <div className={`absolute right-1/2 top-4 h-1 w-full ${currentStep >= step ? 'bg-emerald-500' : 'bg-slate-200'}`} />
+                    )}
+                    <div className={`relative z-10 flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold sm:h-9 sm:w-9 sm:text-base ${currentStep >= step ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
                         {step}
-                      </div>
-                      <span className={`mt-2 text-xs ${currentStep === step ? 'font-semibold text-emerald-700' : 'text-slate-500'}`}>{label}</span>
                     </div>
-                    {index < steps.length - 1 && <div className={`mt-4 h-1 w-6 sm:w-10 ${currentStep > step ? 'bg-emerald-500' : 'bg-slate-200'}`} />}
+                    <span className={`mt-2 w-full truncate px-0.5 text-center text-[10px] sm:text-xs ${currentStep === step ? 'font-semibold text-emerald-700' : 'text-slate-500'}`}>{label}</span>
                   </div>
                 );
               })}
