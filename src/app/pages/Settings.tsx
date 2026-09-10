@@ -262,20 +262,20 @@ export default function Settings() {
           <BackButton />
         </div>
 
-        <div className="bg-white rounded-xl shadow-lg p-6 md:p-8 mb-6">
+        <div className="flex flex-col bg-white rounded-xl shadow-lg p-4 sm:p-6 md:p-8 mb-6">
           {isLoading && <div className="mb-4"><LoadingMessage text="Loading settings…" /></div>}
           {dataError && <div className="mb-4"><ErrorMessage message={dataError} /></div>}
-          <div className="flex items-center gap-3 mb-6">
+          <div className="order-0 flex items-center gap-3 mb-6">
             <SettingsIcon className="w-8 h-8 text-slate-700" />
             <h2 className="text-2xl md:text-3xl font-bold text-slate-900">
               Administrator Settings
             </h2>
           </div>
 
-          <AssessmentArchives username={currentUser.username} />
+          <div className="order-2"><AssessmentArchives username={currentUser.username} /></div>
 
           {/* Change Password Section */}
-          <div className="border-b border-slate-200 pb-6 mb-6">
+          <div className="order-3 border-b border-slate-200 pb-6 mb-6">
             <div className="flex items-center gap-2 mb-4">
               <Key className="w-5 h-5 text-slate-600" />
               <h3 className="text-xl font-bold text-slate-900">Change Password</h3>
@@ -333,7 +333,7 @@ export default function Settings() {
           </div>
 
           {/* Round Management Section */}
-          <div className="border-b border-slate-200 pb-6 mb-6">
+          <div id="manage-rounds" className="order-1 border-b border-slate-200 pb-6 mb-6">
             <div className="flex items-center gap-2 mb-2">
               <ListChecks className="w-5 h-5 text-slate-600" />
               <h3 className="text-xl font-bold text-slate-900">Manage Rounds</h3>
@@ -393,13 +393,13 @@ export default function Settings() {
             {roundError && <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{roundError}</div>}
             {roundSuccess && <div className="mt-4 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700">{roundSuccess}</div>}
 
-            <button type="button" onClick={handleSaveRounds} className="mt-4 flex items-center gap-2 rounded-lg bg-emerald-600 px-6 py-3 font-semibold text-white shadow-md hover:bg-emerald-700">
-              <Save className="h-5 w-5" /> Save Rounds
+            <button type="button" onClick={handleSaveRounds} className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-6 py-3 font-semibold text-white shadow-md hover:bg-emerald-700 sm:w-auto">
+              <Save className="h-5 w-5" /> Save Round & Boulder Settings
             </button>
           </div>
 
           {/* Create User Section */}
-          <div className="border-b border-slate-200 pb-6 mb-6">
+          <div className="order-4 border-b border-slate-200 pb-6 mb-6">
             <div className="flex items-center gap-2 mb-4">
               <UserPlus className="w-5 h-5 text-slate-600" />
               <h3 className="text-xl font-bold text-slate-900">Create New User</h3>
@@ -474,7 +474,7 @@ export default function Settings() {
           </div>
 
           {/* Users List */}
-          <div>
+          <div className="order-5">
             <h3 className="text-xl font-bold text-slate-900 mb-4">Existing Users</h3>
 
             <div className="space-y-3 sm:hidden">{users.map((user) => <article key={user.key} className="rounded-xl border border-slate-200 p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-bold text-slate-900">{user.username}</p><p className="text-sm capitalize text-slate-600">{user.role.replace('-', ' ')}</p><p className="text-xs text-slate-500">Created {new Date(user.createdAt).toLocaleDateString()}</p></div>{user.username !== 'admin' && <button aria-label={`Delete user ${user.username}`} onClick={() => handleDeleteUser(user.key || '', user.username)} className="flex h-11 w-11 items-center justify-center rounded-lg bg-red-100 text-red-700"><Trash2 className="h-5 w-5" /></button>}</div></article>)}</div>
