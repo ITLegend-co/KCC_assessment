@@ -38,24 +38,21 @@ interface Score {
 
 export default function JudgeScoring() {
   const navigate = useNavigate();
-  const currentUser = getCurrentUser();
+  const [currentUser] = useState(() => getCurrentUser());
   const rounds = useRounds();
   const { settings: competitionSettings, loading: settingsLoading, error: settingsError } = useCompetitionSettings();
   const canViewScores = currentUser?.role === 'administrator' || currentUser?.role === 'chief-judge';
+  const canAccessJudging = currentUser?.role === 'administrator' || currentUser?.role === 'chief-judge' || currentUser?.role === 'judge';
 
   useEffect(() => {
     if (!currentUser) {
       navigate('/login');
       return;
     }
-    const canAccess =
-      currentUser.role === 'administrator' ||
-      currentUser.role === 'chief-judge' ||
-      currentUser.role === 'judge';
-    if (!canAccess) {
+    if (!canAccessJudging) {
       navigate('/');
     }
-  }, [currentUser, navigate]);
+  }, [canAccessJudging, currentUser, navigate]);
 
   const [students, setStudents] = useState<Student[]>([]);
   const [scores, setScores] = useState<Score[]>([]);
@@ -577,7 +574,7 @@ const startCreateNew = () => {
     setShowHistoryModal(true);
   };
 
-  if (!currentUser) {
+  if (!currentUser || !canAccessJudging) {
     return null;
   }
 

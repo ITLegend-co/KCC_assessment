@@ -24,20 +24,18 @@ type SortDirection = 'asc' | 'desc';
 
 export default function StudentRegistration() {
   const navigate = useNavigate();
-  const currentUser = getCurrentUser();
+  const [currentUser] = useState(() => getCurrentUser());
+  const canAccessRegistration = currentUser?.role === 'administrator' || currentUser?.role === 'registry';
 
   useEffect(() => {
     if (!currentUser) {
       navigate('/login');
       return;
     }
-    const canAccess =
-      currentUser.role === 'administrator' ||
-      currentUser.role === 'registry';
-    if (!canAccess) {
+    if (!canAccessRegistration) {
       navigate('/');
     }
-  }, [currentUser, navigate]);
+  }, [canAccessRegistration, currentUser, navigate]);
 
   const [students, setStudents] = useState<Student[]>([]);
   const [formData, setFormData] = useState({
@@ -140,11 +138,19 @@ export default function StudentRegistration() {
       };
       
       if (existingStudent && nextId && nextId !== existingStudent.id) {
-        const scoresSnapshot = await get(ref(database, 'scores'));
+        const [scoresSnapshot, assessmentsSnapshot] = await Promise.all([
+          get(ref(database, 'scores')),
+          get(ref(database, 'studentAssessments')),
+        ]);
         const updates: Record<string, unknown> = { [`students/${editKey}`]: updatedData };
         if (scoresSnapshot.exists()) {
           Object.entries(scoresSnapshot.val() as Record<string, { id?: string }>).forEach(([key, score]) => {
             if (score.id === existingStudent.id) updates[`scores/${key}/id`] = nextId;
+          });
+        }
+        if (assessmentsSnapshot.exists()) {
+          Object.entries(assessmentsSnapshot.val() as Record<string, { id?: string }>).forEach(([key, assessment]) => {
+            if (assessment.id === existingStudent.id) updates[`studentAssessments/${key}/id`] = nextId;
           });
         }
         await update(ref(database), updates);
@@ -190,11 +196,19 @@ export default function StudentRegistration() {
     if (window.confirm('Delete this student?')) {
       try {
         const student = students.find((item) => item.key === key);
-        const scoresSnapshot = await get(ref(database, 'scores'));
+        const [scoresSnapshot, assessmentsSnapshot] = await Promise.all([
+          get(ref(database, 'scores')),
+          get(ref(database, 'studentAssessments')),
+        ]);
         const updates: Record<string, null> = { [`students/${key}`]: null };
         if (student && scoresSnapshot.exists()) {
           Object.entries(scoresSnapshot.val() as Record<string, { id?: string }>).forEach(([scoreKey, score]) => {
             if (score.id === student.id) updates[`scores/${scoreKey}`] = null;
+          });
+        }
+        if (student && assessmentsSnapshot.exists()) {
+          Object.entries(assessmentsSnapshot.val() as Record<string, { id?: string }>).forEach(([assessmentKey, assessment]) => {
+            if (assessment.id === student.id) updates[`studentAssessments/${assessmentKey}`] = null;
           });
         }
         await update(ref(database), updates);
@@ -241,11 +255,17 @@ export default function StudentRegistration() {
 
     if (window.confirm(`Delete ${selectedStudents.size} selected student${selectedStudents.size > 1 ? 's' : ''}?`)) {
       const selectedIds = new Set(students.filter((student) => selectedStudents.has(student.key!)).map((student) => student.id));
-      const scoresSnapshot = await get(ref(database, 'scores'));
+      const [scoresSnapshot, assessmentsSnapshot] = await Promise.all([
+        get(ref(database, 'scores')),
+        get(ref(database, 'studentAssessments')),
+      ]);
       const updates: Record<string, null> = {};
       selectedStudents.forEach((key) => { updates[`students/${key}`] = null; });
       if (scoresSnapshot.exists()) Object.entries(scoresSnapshot.val() as Record<string, { id?: string }>).forEach(([scoreKey, score]) => {
         if (score.id && selectedIds.has(score.id)) updates[`scores/${scoreKey}`] = null;
+      });
+      if (assessmentsSnapshot.exists()) Object.entries(assessmentsSnapshot.val() as Record<string, { id?: string }>).forEach(([assessmentKey, assessment]) => {
+        if (assessment.id && selectedIds.has(assessment.id)) updates[`studentAssessments/${assessmentKey}`] = null;
       });
       await update(ref(database), updates);
       setSelectedStudents(new Set());
@@ -260,7 +280,7 @@ export default function StudentRegistration() {
     }
 
     if (window.confirm(`Delete ALL ${students.length} students? This action cannot be undone!`)) {
-      await update(ref(database), { students: null, scores: null });
+      await update(ref(database), { students: null, scores: null, studentAssessments: null });
       setSelectedStudents(new Set());
       setSelectAll(false);
     }
@@ -282,6 +302,8 @@ export default function StudentRegistration() {
         : (b[sortField] as string).localeCompare(a[sortField] as string);
     }
   });
+
+  if (!currentUser || !canAccessRegistration) return null;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:p-6">

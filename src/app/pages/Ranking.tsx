@@ -25,7 +25,7 @@ export default function Ranking() {
         <div className="mb-6">
           <BackButton />
         </div>
-        <RankingBoard showCopyLink={true} />
+        <RankingBoard showCopyLink={true} showAssessmentResults={true} />
       </div>
       <TimerButton />
     </div>

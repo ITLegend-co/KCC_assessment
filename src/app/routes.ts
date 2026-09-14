@@ -9,6 +9,9 @@ import Ranking from "./pages/Ranking";
 import RankingOnly from "./pages/RankingOnly";
 import QrGenerator from "./pages/QrGenerator";
 import AppError from "./pages/AppError";
+import StudentAssessment from "./pages/StudentAssessment";
+import AssessmentResults from "./pages/AssessmentResults";
+import StudentAssessmentDetail from "./pages/StudentAssessmentDetail";
 
 export const router = createHashRouter([
   {
@@ -45,6 +48,18 @@ export const router = createHashRouter([
       {
         path: "ranking",
         Component: Ranking,
+      },
+      {
+        path: "student-assessment",
+        Component: StudentAssessment,
+      },
+      {
+        path: "assessment-results",
+        Component: AssessmentResults,
+      },
+      {
+        path: "assessment-results/:studentKey",
+        Component: StudentAssessmentDetail,
       },
       {
         path: "qr-generator",

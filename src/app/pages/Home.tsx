@@ -1,11 +1,11 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { UserPlus, ClipboardCheck, Trophy, LogOut, Settings, QrCode } from 'lucide-react';
+import { UserPlus, ClipboardCheck, Trophy, LogOut, Settings, QrCode, GraduationCap } from 'lucide-react';
 import { getCurrentUser, logout } from '../lib/auth';
 
 export default function Home() {
   const navigate = useNavigate();
-  const currentUser = getCurrentUser();
+  const [currentUser] = useState(() => getCurrentUser());
 
   useEffect(() => {
     if (!currentUser) {
@@ -32,6 +32,10 @@ export default function Home() {
     currentUser.role === 'judge';
 
   const canAccessSettings = currentUser.role === 'administrator';
+  const canAccessAssessment =
+    currentUser.role === 'administrator' ||
+    currentUser.role === 'coach';
+  const canAccessQrGenerator = currentUser.role !== 'coach';
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 flex items-start justify-center p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:items-center">
@@ -52,6 +56,8 @@ export default function Home() {
                   ? 'bg-emerald-100 text-emerald-700'
                   : currentUser.role === 'judge'
                   ? 'bg-blue-100 text-blue-700'
+                  : currentUser.role === 'coach'
+                  ? 'bg-cyan-100 text-cyan-700'
                   : 'bg-amber-100 text-amber-700'
               }`}
             >
@@ -61,6 +67,8 @@ export default function Home() {
                 ? 'Admin'
                 : currentUser.role === 'judge'
                 ? 'Judge'
+                : currentUser.role === 'coach'
+                ? 'Coach'
                 : 'Registry'}
             </span>
           </div>
@@ -87,6 +95,16 @@ export default function Home() {
             </Link>
           )}
 
+          {canAccessAssessment && (
+            <Link
+              to="/student-assessment"
+              className="flex items-center justify-center gap-3 w-full p-4 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98]"
+            >
+              <GraduationCap className="w-5 h-5" />
+              Student Assessment
+            </Link>
+          )}
+
           <Link
             to="/ranking"
             className="flex items-center justify-center gap-3 w-full p-4 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98]"
@@ -95,13 +113,15 @@ export default function Home() {
             Ranking Board
           </Link>
 
-          <Link
-            to="/qr-generator"
-            className="flex items-center justify-center gap-3 w-full p-4 bg-violet-600 hover:bg-violet-700 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98]"
-          >
-            <QrCode className="w-5 h-5" />
-            Generate QR Codes
-          </Link>
+          {canAccessQrGenerator && (
+            <Link
+              to="/qr-generator"
+              className="flex items-center justify-center gap-3 w-full p-4 bg-violet-600 hover:bg-violet-700 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98]"
+            >
+              <QrCode className="w-5 h-5" />
+              Generate QR Codes
+            </Link>
+          )}
 
           <div className="pt-4 border-t border-slate-200 space-y-3">
             {canAccessSettings && (

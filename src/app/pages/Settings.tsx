@@ -3,17 +3,22 @@ import { BackButton } from '../components/BackButton';
 import { getCurrentUser, User } from '../lib/auth';
 import { database } from '../lib/firebase';
 import { ref, get, set, update, remove } from 'firebase/database';
-import { Settings as SettingsIcon, Key, UserPlus, Trash2, Save, ListChecks, Plus, ArrowUp, ArrowDown } from 'lucide-react';
+import { Settings as SettingsIcon, Key, UserPlus, Trash2, Save, ListChecks, Plus, ArrowUp, ArrowDown, GraduationCap } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { DEFAULT_ROUNDS, normalizeRounds } from '../lib/rounds';
 import { AssessmentArchives } from '../components/AssessmentArchives';
 import { BoulderNumberingMode, DEFAULT_COMPETITION_SETTINGS } from '../lib/competition';
 import { describeError } from '../lib/appError';
 import { ErrorMessage, LoadingMessage } from '../components/StatusMessage';
+import {
+  DEFAULT_ASSESSMENT_RESULT_FIELDS,
+  normalizeAssessmentResultFields,
+  type AssessmentResultFields,
+} from '../lib/studentAssessment';
 
 export default function Settings() {
   const navigate = useNavigate();
-  const currentUser = getCurrentUser();
+  const [currentUser] = useState(() => getCurrentUser());
 
   const [users, setUsers] = useState<User[]>([]);
   const [newPassword, setNewPassword] = useState('');
@@ -23,11 +28,11 @@ export default function Settings() {
 
   const [newUsername, setNewUsername] = useState('');
   const [newUserPassword, setNewUserPassword] = useState('');
-  const [newUserRole, setNewUserRole] = useState<'chief-judge' | 'judge' | 'registry'>('judge');
+  const [newUserRole, setNewUserRole] = useState<'chief-judge' | 'judge' | 'registry' | 'coach'>('judge');
   const [userError, setUserError] = useState('');
   const [userSuccess, setUserSuccess] = useState('');
   const [rounds, setRounds] = useState<string[]>(DEFAULT_ROUNDS);
-  const [savedRounds, setSavedRounds] = useState<string[]>(DEFAULT_ROUNDS);
+  const [roundOrigins, setRoundOrigins] = useState<Array<string | null>>(DEFAULT_ROUNDS);
   const [newRound, setNewRound] = useState('');
   const [roundError, setRoundError] = useState('');
   const [roundSuccess, setRoundSuccess] = useState('');
@@ -35,6 +40,9 @@ export default function Settings() {
   const [boulderCounts, setBoulderCounts] = useState<Record<string, number>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [dataError, setDataError] = useState('');
+  const [assessmentResultFields, setAssessmentResultFields] = useState<AssessmentResultFields>(DEFAULT_ASSESSMENT_RESULT_FIELDS);
+  const [assessmentDisplayError, setAssessmentDisplayError] = useState('');
+  const [assessmentDisplaySuccess, setAssessmentDisplaySuccess] = useState('');
 
   useEffect(() => {
     if (!currentUser || currentUser.role !== 'administrator') {
@@ -43,7 +51,7 @@ export default function Settings() {
     }
     loadUsers();
     loadRounds();
-  }, [currentUser, navigate]);
+  }, [currentUser?.role, navigate]);
 
   const loadUsers = async () => {
     try {
@@ -63,13 +71,22 @@ export default function Settings() {
 
   const loadRounds = async () => {
     try {
-    const [roundSnapshot, competitionSnapshot] = await Promise.all([get(ref(database, 'settings/rounds')), get(ref(database, 'settings/competition'))]);
+    const [roundSnapshot, competitionSnapshot, assessmentSnapshot] = await Promise.all([
+      get(ref(database, 'settings/rounds')),
+      get(ref(database, 'settings/competition')),
+      get(ref(database, 'settings/assessment/resultFields')),
+    ]);
     const loadedRounds = roundSnapshot.exists() ? normalizeRounds(roundSnapshot.val()) : DEFAULT_ROUNDS;
     const competition = { ...DEFAULT_COMPETITION_SETTINGS, ...(competitionSnapshot.val() || {}) };
     setRounds(loadedRounds);
-    setSavedRounds(loadedRounds);
-    setNumberingMode(competition.numberingMode);
+    setRoundOrigins(loadedRounds);
+    setNumberingMode(competition.numberingMode === 'per-round' ? 'per-round' : 'continuous');
     setBoulderCounts(competition.boulderCounts || {});
+    setAssessmentResultFields(
+      assessmentSnapshot.exists()
+        ? normalizeAssessmentResultFields(assessmentSnapshot.val())
+        : DEFAULT_ASSESSMENT_RESULT_FIELDS,
+    );
     } catch (error) { const d = describeError(error, 'Unable to load settings'); setDataError(`${d.message} — ${d.code}`); }
     finally { setIsLoading(false); }
   };
@@ -91,6 +108,7 @@ export default function Settings() {
       return;
     }
     setRounds((current) => [...current, roundName]);
+    setRoundOrigins((current) => [...current, null]);
     setNewRound('');
     setRoundError('');
     setRoundSuccess('');
@@ -102,6 +120,7 @@ export default function Settings() {
       return;
     }
     setRounds((current) => current.filter((_, itemIndex) => itemIndex !== index));
+    setRoundOrigins((current) => current.filter((_, itemIndex) => itemIndex !== index));
     setRoundError('');
     setRoundSuccess('');
   };
@@ -114,13 +133,21 @@ export default function Settings() {
       [updated[index], updated[targetIndex]] = [updated[targetIndex], updated[index]];
       return updated;
     });
+    setRoundOrigins((current) => {
+      const updated = [...current];
+      [updated[index], updated[targetIndex]] = [updated[targetIndex], updated[index]];
+      return updated;
+    });
     setRoundSuccess('');
   };
 
   const handleSaveRounds = async () => {
     setRoundError('');
     setRoundSuccess('');
-    const cleanedRounds = rounds.map((item) => item.trim()).filter(Boolean);
+    const cleanedItems = rounds
+      .map((item, index) => ({ name: item.trim(), originalName: roundOrigins[index] || null }))
+      .filter((item) => item.name);
+    const cleanedRounds = cleanedItems.map((item) => item.name);
     if (cleanedRounds.length === 0) {
       setRoundError('At least one round is required');
       return;
@@ -131,32 +158,52 @@ export default function Settings() {
     }
 
     try {
-      const scoresSnapshot = await get(ref(database, 'scores'));
-      const settingsSnapshot = await get(ref(database, 'settings/competition/boulderCounts'));
+      const [scoresSnapshot, assessmentsSnapshot, settingsSnapshot] = await Promise.all([
+        get(ref(database, 'scores')),
+        get(ref(database, 'studentAssessments')),
+        get(ref(database, 'settings/competition/boulderCounts')),
+      ]);
       const existingCounts = settingsSnapshot.val() || {};
-      const renamed = savedRounds.map((oldName, index) => ({ oldName, newName: cleanedRounds[index] })).filter(({ oldName, newName }) => newName && oldName !== newName && !cleanedRounds.includes(oldName));
+      const renamed = cleanedItems
+        .filter(({ originalName, name }) => originalName && originalName !== name && !cleanedRounds.includes(originalName))
+        .map(({ originalName, name }) => ({ oldName: originalName as string, newName: name }));
       const updates: Record<string, unknown> = {
         'settings/rounds': cleanedRounds,
         'settings/competition/numberingMode': numberingMode,
       };
       const nextCounts: Record<string, number> = {};
-      cleanedRounds.forEach((name) => {
-        const oldName = renamed.find((item) => item.newName === name)?.oldName;
-        nextCounts[name] = Math.max(1, Number(boulderCounts[name] ?? existingCounts[name] ?? (oldName ? existingCounts[oldName] : 5)) || 5);
+      cleanedItems.forEach(({ name, originalName }) => {
+        nextCounts[name] = Math.max(1, Number(boulderCounts[name] ?? existingCounts[name] ?? (originalName ? existingCounts[originalName] : 5)) || 5);
       });
       updates['settings/competition/boulderCounts'] = nextCounts;
       if (scoresSnapshot.exists()) Object.entries(scoresSnapshot.val() as Record<string, { round?: string }>).forEach(([key, score]) => {
         const match = renamed.find((item) => item.oldName === score.round);
         if (match) updates[`scores/${key}/round`] = match.newName;
       });
+      if (assessmentsSnapshot.exists()) Object.entries(assessmentsSnapshot.val() as Record<string, { round?: string }>).forEach(([key, assessment]) => {
+        const match = renamed.find((item) => item.oldName === assessment.round);
+        if (match) updates[`studentAssessments/${key}/round`] = match.newName;
+      });
       await update(ref(database), updates);
       setRounds(cleanedRounds);
-      setSavedRounds(cleanedRounds);
+      setRoundOrigins(cleanedRounds);
       setBoulderCounts(nextCounts);
       setRoundSuccess('Rounds saved successfully');
     } catch (error) {
       const details = describeError(error, 'Failed to save rounds');
       setRoundError(`${details.message} — ${details.code} — ${details.time}`);
+    }
+  };
+
+  const handleSaveAssessmentDisplay = async () => {
+    setAssessmentDisplayError('');
+    setAssessmentDisplaySuccess('');
+    try {
+      await set(ref(database, 'settings/assessment/resultFields'), assessmentResultFields);
+      setAssessmentDisplaySuccess('Student assessment result display saved successfully');
+    } catch (error) {
+      const details = describeError(error, 'Assessment result display could not be saved');
+      setAssessmentDisplayError(`${details.message} — ${details.code} — ${details.time}`);
     }
   };
 
@@ -272,10 +319,33 @@ export default function Settings() {
             </h2>
           </div>
 
-          <div className="order-2"><AssessmentArchives username={currentUser.username} /></div>
+          <section className="order-2 border-b border-slate-200 pb-6 mb-6">
+            <div className="mb-2 flex items-center gap-2">
+              <GraduationCap className="h-5 w-5 text-cyan-700" />
+              <h3 className="text-xl font-bold text-slate-900">Student Assessment Result Display</h3>
+            </div>
+            <p className="mb-4 text-sm text-slate-600">Choose which student information appears in the assessment result list. Name and Overall Result are always shown.</p>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              <label className="flex min-h-11 items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3"><input type="checkbox" checked disabled className="h-5 w-5" /><span className="font-semibold text-slate-700">Name (required)</span></label>
+              <label className="flex min-h-11 items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3"><input type="checkbox" checked disabled className="h-5 w-5" /><span className="font-semibold text-slate-700">Overall Result (required)</span></label>
+              {([
+                ['bib', 'BIB'],
+                ['school', 'School'],
+                ['class', 'Class'],
+                ['age', 'Age'],
+                ['gender', 'Gender'],
+                ['overallAverage', 'Overall Average'],
+              ] as Array<[keyof AssessmentResultFields, string]>).map(([field, label]) => <label key={field} className="flex min-h-11 items-center gap-3 rounded-lg border border-slate-200 px-3 hover:bg-slate-50"><input type="checkbox" checked={assessmentResultFields[field]} onChange={(event) => setAssessmentResultFields((current) => ({ ...current, [field]: event.target.checked }))} className="h-5 w-5" /><span className="font-medium text-slate-700">{label}</span></label>)}
+            </div>
+            {assessmentDisplayError && <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{assessmentDisplayError}</div>}
+            {assessmentDisplaySuccess && <div className="mt-4 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700">{assessmentDisplaySuccess}</div>}
+            <button type="button" onClick={() => void handleSaveAssessmentDisplay()} className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-cyan-600 px-6 font-semibold text-white hover:bg-cyan-700 sm:w-auto"><Save className="h-5 w-5" /> Save Assessment Display</button>
+          </section>
+
+          <div className="order-3"><AssessmentArchives username={currentUser.username} /></div>
 
           {/* Change Password Section */}
-          <div className="order-3 border-b border-slate-200 pb-6 mb-6">
+          <div className="order-4 border-b border-slate-200 pb-6 mb-6">
             <div className="flex items-center gap-2 mb-4">
               <Key className="w-5 h-5 text-slate-600" />
               <h3 className="text-xl font-bold text-slate-900">Change Password</h3>
@@ -358,14 +428,14 @@ export default function Settings() {
                     aria-label={`Round ${index + 1} name`}
                     className="min-w-0 basis-[calc(100%-2.25rem)] flex-1 rounded-lg border border-slate-300 px-4 py-2 focus:ring-2 focus:ring-emerald-500 sm:basis-auto"
                   />
-                  <label className="w-24 text-xs font-semibold text-slate-600">Boulders<input aria-label={`${roundName} boulder count`} type="number" min="1" max="99" value={boulderCounts[roundName] || 5} onChange={(event) => setBoulderCounts((current) => ({ ...current, [roundName]: Math.max(1, Number(event.target.value)) }))} className="mt-1 w-full rounded-lg border px-2 py-2 text-base" /></label>
-                  <button type="button" onClick={() => moveRound(index, -1)} disabled={index === 0} aria-label={`Move ${roundName} up`} className="rounded-lg bg-slate-100 p-2 text-slate-700 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-40">
+                  <label className="w-24 text-xs font-semibold text-slate-600">Boulders<input aria-label={`${roundName} boulder count`} type="number" min="1" max="99" value={boulderCounts[roundName] ?? (roundOrigins[index] ? boulderCounts[roundOrigins[index] as string] : undefined) ?? 5} onChange={(event) => setBoulderCounts((current) => ({ ...current, [roundName]: Math.max(1, Number(event.target.value)) }))} className="mt-1 w-full rounded-lg border px-2 py-2 text-base" /></label>
+                  <button type="button" onClick={() => moveRound(index, -1)} disabled={index === 0} aria-label={`Move ${roundName} up`} title="Move round up" className="flex h-11 w-11 items-center justify-center rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-40">
                     <ArrowUp className="h-5 w-5" />
                   </button>
-                  <button type="button" onClick={() => moveRound(index, 1)} disabled={index === rounds.length - 1} aria-label={`Move ${roundName} down`} className="rounded-lg bg-slate-100 p-2 text-slate-700 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-40">
+                  <button type="button" onClick={() => moveRound(index, 1)} disabled={index === rounds.length - 1} aria-label={`Move ${roundName} down`} title="Move round down" className="flex h-11 w-11 items-center justify-center rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-40">
                     <ArrowDown className="h-5 w-5" />
                   </button>
-                  <button type="button" onClick={() => handleDeleteRound(index)} aria-label={`Delete ${roundName}`} className="rounded-lg bg-red-100 p-2 text-red-700 hover:bg-red-200">
+                  <button type="button" onClick={() => handleDeleteRound(index)} aria-label={`Delete ${roundName}`} title="Delete round" className="flex h-11 w-11 items-center justify-center rounded-lg bg-red-100 text-red-700 hover:bg-red-200">
                     <Trash2 className="h-5 w-5" />
                   </button>
                 </div>
@@ -399,7 +469,7 @@ export default function Settings() {
           </div>
 
           {/* Create User Section */}
-          <div className="order-4 border-b border-slate-200 pb-6 mb-6">
+          <div className="order-5 border-b border-slate-200 pb-6 mb-6">
             <div className="flex items-center gap-2 mb-4">
               <UserPlus className="w-5 h-5 text-slate-600" />
               <h3 className="text-xl font-bold text-slate-900">Create New User</h3>
@@ -441,12 +511,13 @@ export default function Settings() {
                 <select
                   value={newUserRole}
                   onChange={(e) =>
-                    setNewUserRole(e.target.value as 'chief-judge' | 'judge' | 'registry')
+                    setNewUserRole(e.target.value as 'chief-judge' | 'judge' | 'registry' | 'coach')
                   }
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                 >
                   <option value="chief-judge">Chief Judge</option>
                   <option value="judge">Judge</option>
+                  <option value="coach">Coach</option>
                   <option value="registry">Registry</option>
                 </select>
               </div>
@@ -474,7 +545,7 @@ export default function Settings() {
           </div>
 
           {/* Users List */}
-          <div className="order-5">
+          <div className="order-6">
             <h3 className="text-xl font-bold text-slate-900 mb-4">Existing Users</h3>
 
             <div className="space-y-3 sm:hidden">{users.map((user) => <article key={user.key} className="rounded-xl border border-slate-200 p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-bold text-slate-900">{user.username}</p><p className="text-sm capitalize text-slate-600">{user.role.replace('-', ' ')}</p><p className="text-xs text-slate-500">Created {new Date(user.createdAt).toLocaleDateString()}</p></div>{user.username !== 'admin' && <button aria-label={`Delete user ${user.username}`} onClick={() => handleDeleteUser(user.key || '', user.username)} className="flex h-11 w-11 items-center justify-center rounded-lg bg-red-100 text-red-700"><Trash2 className="h-5 w-5" /></button>}</div></article>)}</div>
@@ -511,6 +582,8 @@ export default function Settings() {
                               ? 'bg-emerald-100 text-emerald-700'
                               : user.role === 'judge'
                               ? 'bg-blue-100 text-blue-700'
+                              : user.role === 'coach'
+                              ? 'bg-cyan-100 text-cyan-700'
                               : 'bg-amber-100 text-amber-700'
                           }`}
                         >
@@ -520,6 +593,8 @@ export default function Settings() {
                             ? 'Administrator'
                             : user.role === 'judge'
                             ? 'Judge'
+                            : user.role === 'coach'
+                            ? 'Coach'
                             : 'Registry'}
                         </span>
                       </td>

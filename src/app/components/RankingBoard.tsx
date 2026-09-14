@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Trophy, Medal, Award, Search, Copy, Check, Users, X, QrCode } from 'lucide-react';
+import { Trophy, Medal, Award, Search, Copy, Check, Users, X, QrCode, GraduationCap } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useNavigate } from 'react-router';
 import { database } from '../lib/firebase';
 import { ref, onValue } from 'firebase/database';
 import { calculateBoulderPoints } from '../lib/scoring';
@@ -8,8 +9,7 @@ import { QrCodeCard } from './QrCodeCard';
 import { useRounds } from '../hooks/useRounds';
 import { getBoulderRange, useCompetitionSettings } from '../lib/competition';
 import { ErrorMessage, LoadingMessage } from './StatusMessage';
-
-const RANKING_ONLY_URL = 'https://itlegend-co.github.io/KCC_assessment/#/ranking-only';
+import { StudentInfoModal } from './StudentInfoModal';
 
 interface Student {
   id: string;
@@ -44,9 +44,11 @@ type GenderFilter = 'both' | 'male' | 'female';
 
 interface RankingBoardProps {
   showCopyLink?: boolean;
+  showAssessmentResults?: boolean;
 }
 
-export function RankingBoard({ showCopyLink = false }: RankingBoardProps) {
+export function RankingBoard({ showCopyLink = false, showAssessmentResults = false }: RankingBoardProps) {
+  const navigate = useNavigate();
   const [students, setStudents] = useState<Student[]>([]);
   const [scores, setScores] = useState<Score[]>([]);
   const [selectedRound, setSelectedRound] = useState('Qualifier');
@@ -61,6 +63,7 @@ export function RankingBoard({ showCopyLink = false }: RankingBoardProps) {
   const [studentsLoading, setStudentsLoading] = useState(true);
   const [scoresLoading, setScoresLoading] = useState(true);
   const [dataError, setDataError] = useState('');
+  const rankingOnlyUrl = `${window.location.origin}${window.location.pathname}#/ranking-only`;
 
   useEffect(() => {
     if (!rounds.includes(selectedRound)) {
@@ -245,7 +248,7 @@ export function RankingBoard({ showCopyLink = false }: RankingBoardProps) {
   };
 
   const handleCopyLink = () => {
-    const url = RANKING_ONLY_URL;
+    const url = rankingOnlyUrl;
     
     // Fallback method that works without Clipboard API
     const textArea = document.createElement('textarea');
@@ -410,7 +413,10 @@ export function RankingBoard({ showCopyLink = false }: RankingBoardProps) {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <h2 className="text-2xl md:text-3xl font-bold text-slate-900">Student Ranking</h2>
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+              {showAssessmentResults && <button type="button" onClick={() => navigate(`/assessment-results?round=${encodeURIComponent(selectedRound)}`)} className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-cyan-600 px-4 font-semibold text-white shadow-md hover:bg-cyan-700">
+                <GraduationCap className="h-5 w-5" /> Student Assessment Result
+              </button>}
               <label className="text-sm font-semibold text-slate-700">Round:</label>
               <select
                 value={selectedRound}
@@ -542,84 +548,20 @@ export function RankingBoard({ showCopyLink = false }: RankingBoardProps) {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} role="dialog" aria-modal="true" aria-label="Ranking QR code" className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setShowRankingQr(false)}>
             <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} className="relative w-full max-w-md" onClick={(e) => e.stopPropagation()}>
               <button aria-label="Close ranking QR" onClick={() => setShowRankingQr(false)} className="absolute right-3 top-3 z-10 flex h-11 w-11 items-center justify-center rounded-lg bg-white shadow hover:bg-slate-100"><X className="h-5 w-5" /></button>
-              <QrCodeCard value={RANKING_ONLY_URL} title="Student Ranking" subtitle="Scan to view live rankings" fileName="KCC-Student-Ranking" />
+              <QrCodeCard value={rankingOnlyUrl} title="Student Ranking" subtitle="Scan to view live rankings" fileName="KCC-Student-Ranking" />
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Student Information Modal */}
       <AnimatePresence>
-        {selectedStudentInfo && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-            onClick={() => setSelectedStudentInfo(null)}
-          >
-            <motion.div
-              initial={{ scale: 0.9, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 20 }}
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="student-info-title"
-              className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-xl bg-white p-5 shadow-2xl sm:p-6 md:p-8"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-start justify-between mb-6">
-                <h3 id="student-info-title" className="text-2xl font-bold text-slate-900">Student Information</h3>
-                <button
-                  onClick={() => setSelectedStudentInfo(null)}
-                  className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-                >
-                  <X className="w-5 h-5 text-slate-500" />
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                <div className="flex justify-between items-center py-3 border-b border-slate-200">
-                  <span className="font-semibold text-slate-700">BIB:</span>
-                  <span className="text-slate-900 font-mono">{selectedStudentInfo.id}</span>
-                </div>
-                <div className="flex justify-between items-center py-3 border-b border-slate-200">
-                  <span className="font-semibold text-slate-700">Name:</span>
-                  <span className="text-slate-900 font-semibold">{selectedStudentInfo.name}</span>
-                </div>
-                <div className="flex justify-between items-center py-3 border-b border-slate-200">
-                  <span className="font-semibold text-slate-700">School:</span>
-                  <span className="text-slate-900">{selectedStudentInfo.school}</span>
-                </div>
-                <div className="flex justify-between items-center py-3 border-b border-slate-200">
-                  <span className="font-semibold text-slate-700">Class:</span>
-                  <span className="text-slate-900">{selectedStudentInfo.class}</span>
-                </div>
-                <div className="flex justify-between items-center py-3 border-b border-slate-200">
-                  <span className="font-semibold text-slate-700">Age:</span>
-                  <span className="text-slate-900">{selectedStudentInfo.age}</span>
-                </div>
-                <div className="flex justify-between items-center py-3 border-b border-slate-200">
-                  <span className="font-semibold text-slate-700">Gender:</span>
-                  <span className={`px-3 py-1 rounded-full font-medium ${
-                    selectedStudentInfo.gender === 'male'
-                      ? 'bg-blue-100 text-blue-700'
-                      : 'bg-pink-100 text-pink-700'
-                  }`}>
-                    {selectedStudentInfo.gender === 'male' ? 'Male' : 'Female'}
-                  </span>
-                </div>
-              </div>
-
-              <button
-                onClick={() => setSelectedStudentInfo(null)}
-                className="mt-6 w-full px-6 py-3 bg-slate-600 hover:bg-slate-700 text-white font-semibold rounded-lg transition-colors"
-              >
-                Close
-              </button>
-            </motion.div>
-          </motion.div>
-        )}
+        {selectedStudentInfo && <StudentInfoModal
+          student={selectedStudentInfo}
+          onClose={() => setSelectedStudentInfo(null)}
+          onViewAssessment={showAssessmentResults && selectedStudentInfo.key
+            ? () => navigate(`/assessment-results/${selectedStudentInfo.key}?round=${encodeURIComponent(selectedRound)}`)
+            : undefined}
+        />}
       </AnimatePresence>
     </>
   );

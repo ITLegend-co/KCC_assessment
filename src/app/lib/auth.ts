@@ -4,14 +4,14 @@ import { ref, get, update } from 'firebase/database';
 export interface User {
   username: string;
   password: string;
-  role: 'administrator' | 'chief-judge' | 'judge' | 'registry';
+  role: 'administrator' | 'chief-judge' | 'judge' | 'registry' | 'coach';
   createdAt: string;
   key?: string;
 }
 
 export interface CurrentUser {
   username: string;
-  role: 'administrator' | 'chief-judge' | 'judge' | 'registry';
+  role: 'administrator' | 'chief-judge' | 'judge' | 'registry' | 'coach';
 }
 
 // Login function

@@ -6,6 +6,8 @@ import { database } from '../lib/firebase';
 import { useRounds } from '../hooks/useRounds';
 import { getBoulderRange, useCompetitionSettings } from '../lib/competition';
 import { ErrorMessage, LoadingMessage } from '../components/StatusMessage';
+import { getCurrentUser } from '../lib/auth';
+import { useNavigate } from 'react-router';
 
 interface StudentOption {
   id: string;
@@ -13,6 +15,8 @@ interface StudentOption {
 }
 
 export default function QrGenerator() {
+  const navigate = useNavigate();
+  const [currentUser] = useState(() => getCurrentUser());
   const rounds = useRounds();
   const { settings } = useCompetitionSettings();
   const [selectedRound, setSelectedRound] = useState('');
@@ -23,6 +27,11 @@ export default function QrGenerator() {
   const [students, setStudents] = useState<StudentOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [dataError, setDataError] = useState('');
+
+  useEffect(() => {
+    if (!currentUser) navigate('/login');
+    else if (currentUser.role === 'coach') navigate('/');
+  }, [currentUser, navigate]);
 
   useEffect(() => { if (!selectedRound && rounds.length) setSelectedRound(rounds[0]); }, [rounds, selectedRound]);
 
@@ -48,6 +57,8 @@ export default function QrGenerator() {
   }, []);
 
   const boulderRange = getBoulderRange(rounds, selectedRound, settings);
+
+  if (!currentUser || currentUser.role === 'coach') return null;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:p-6">

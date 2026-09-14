@@ -28,7 +28,12 @@ export function useCompetitionSettings() {
   const [error, setError] = useState('');
 
   useEffect(() => onValue(ref(database, 'settings/competition'), (snapshot) => {
-    setSettings({ ...DEFAULT_COMPETITION_SETTINGS, ...(snapshot.val() || {}) });
+    const loaded = { ...DEFAULT_COMPETITION_SETTINGS, ...(snapshot.val() || {}) };
+    setSettings({
+      ...loaded,
+      numberingMode: loaded.numberingMode === 'per-round' ? 'per-round' : 'continuous',
+      boulderCounts: loaded.boulderCounts || {},
+    });
     setLoading(false);
     setError('');
   }, (reason) => {
