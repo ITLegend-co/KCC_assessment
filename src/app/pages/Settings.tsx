@@ -26,7 +26,7 @@ import { AccountPasswordSection, AdminPasswordResetSection } from '../components
 import {
   buildBibMigration,
   DEFAULT_BIB_SETTINGS,
-  formatBib,
+  generateAvailableBib,
   normalizeBibSettings,
   validateBibSettings,
   type BibSettings,
@@ -290,6 +290,11 @@ export default function Settings() {
     () => buildBibMigration(registeredStudents, bibSettings).filter((entry) => entry.oldId !== entry.newId),
     [bibSettings, registeredStudents],
   );
+  const bibPreview = useMemo(() => {
+    const female = generateAvailableBib([], 'female', bibSettings);
+    const male = generateAvailableBib([{ id: female, gender: 'female', key: 'preview-female' }], 'male', bibSettings);
+    return { female, male };
+  }, [bibSettings]);
 
   const handleSaveBibSettings = async () => {
     setBibError('');
@@ -808,7 +813,7 @@ export default function Settings() {
               </div>
 
               <div>
-                <label htmlFor="bib-female-prefix" className="mb-2 block text-sm font-semibold text-slate-700">Female prefix</label>
+                <label htmlFor="bib-female-prefix" className="mb-2 block text-sm font-semibold text-slate-700">Female prefix (optional)</label>
                 <input
                   id="bib-female-prefix"
                   value={bibSettings.femalePrefix}
@@ -817,11 +822,12 @@ export default function Settings() {
                     femalePrefix: event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4),
                   }))}
                   maxLength={4}
+                  placeholder="F"
                   className="w-full rounded-lg border border-slate-300 px-4 py-3 font-mono uppercase focus:ring-2 focus:ring-pink-500"
                 />
               </div>
               <div>
-                <label htmlFor="bib-male-prefix" className="mb-2 block text-sm font-semibold text-slate-700">Male prefix</label>
+                <label htmlFor="bib-male-prefix" className="mb-2 block text-sm font-semibold text-slate-700">Male prefix (optional)</label>
                 <input
                   id="bib-male-prefix"
                   value={bibSettings.malePrefix}
@@ -830,9 +836,11 @@ export default function Settings() {
                     malePrefix: event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4),
                   }))}
                   maxLength={4}
+                  placeholder="M"
                   className="w-full rounded-lg border border-slate-300 px-4 py-3 font-mono uppercase focus:ring-2 focus:ring-blue-500"
                 />
               </div>
+              <p className="sm:col-span-2 -mt-2 text-xs text-slate-500">Leave both fields blank for number-only BIBs such as 01, 02 and 03. The prefixes may also be the same.</p>
 
               <fieldset className="sm:col-span-2 rounded-xl border border-slate-200 p-4">
                 <legend className="px-2 font-bold text-slate-800">Number sequence</legend>
@@ -875,8 +883,8 @@ export default function Settings() {
             </fieldset>
 
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-xl border border-pink-200 bg-pink-50 p-4"><p className="text-sm font-semibold text-pink-700">{bibSettings.sequenceMode === 'combined' ? 'Registration #1 (female)' : 'Female BIB preview'}</p><p className="mt-1 break-all font-mono text-2xl font-bold text-pink-900">{formatBib('female', bibSettings.sequenceMode === 'combined' ? bibSettings.combinedStart : bibSettings.femaleStart, bibSettings)}</p></div>
-              <div className="rounded-xl border border-blue-200 bg-blue-50 p-4"><p className="text-sm font-semibold text-blue-700">{bibSettings.sequenceMode === 'combined' ? 'Registration #2 (male)' : 'Male BIB preview'}</p><p className="mt-1 break-all font-mono text-2xl font-bold text-blue-900">{formatBib('male', bibSettings.sequenceMode === 'combined' ? bibSettings.combinedStart + 1 : bibSettings.maleStart, bibSettings)}</p></div>
+              <div className="rounded-xl border border-pink-200 bg-pink-50 p-4"><p className="text-sm font-semibold text-pink-700">{bibSettings.sequenceMode === 'combined' ? 'Registration #1 (female)' : 'Female BIB preview'}</p><p className="mt-1 break-all font-mono text-2xl font-bold text-pink-900">{bibPreview.female}</p></div>
+              <div className="rounded-xl border border-blue-200 bg-blue-50 p-4"><p className="text-sm font-semibold text-blue-700">{bibSettings.sequenceMode === 'combined' ? 'Registration #2 (male)' : 'Male BIB preview'}</p><p className="mt-1 break-all font-mono text-2xl font-bold text-blue-900">{bibPreview.male}</p></div>
             </div>
 
             {bibSettings.sequenceMode === 'combined' && <p className="mt-3 rounded-lg bg-violet-50 p-3 text-sm text-violet-800">When current BIBs are regenerated, existing students are numbered in their saved registration order, regardless of gender.</p>}

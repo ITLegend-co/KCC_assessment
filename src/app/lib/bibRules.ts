@@ -43,8 +43,9 @@ export const DEFAULT_BIB_SETTINGS: BibSettings = {
 };
 
 const cleanGenderPrefix = (value: unknown, fallback: string) => {
+  if (value === undefined || value === null) return fallback;
   const cleaned = String(value ?? '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
-  return cleaned || fallback;
+  return cleaned;
 };
 
 const cleanEventPrefix = (value: unknown) => (
@@ -80,14 +81,11 @@ export function normalizeBibSettings(value: unknown): BibSettings {
 
 export function validateBibSettings(settings: BibSettings) {
   const errors: string[] = [];
-  if (!/^[A-Z0-9]{1,4}$/.test(settings.malePrefix)) {
-    errors.push('Male prefix must contain 1–4 letters or numbers.');
+  if (!/^[A-Z0-9]{0,4}$/.test(settings.malePrefix)) {
+    errors.push('Male prefix may contain up to 4 letters or numbers.');
   }
-  if (!/^[A-Z0-9]{1,4}$/.test(settings.femalePrefix)) {
-    errors.push('Female prefix must contain 1–4 letters or numbers.');
-  }
-  if (settings.malePrefix === settings.femalePrefix) {
-    errors.push('Male and female prefixes must be different.');
+  if (!/^[A-Z0-9]{0,4}$/.test(settings.femalePrefix)) {
+    errors.push('Female prefix may contain up to 4 letters or numbers.');
   }
   if (!/^[A-Z0-9-]{0,10}$/.test(settings.eventPrefix)) {
     errors.push('Event prefix may contain up to 10 letters, numbers, or hyphens.');
@@ -223,6 +221,7 @@ export function buildBibMigration(students: BibStudent[], settings: BibSettings)
     return result;
   }
 
+  const assignedIds = new Set<string>();
   (['female', 'male'] as BibGender[]).forEach((gender) => {
     const ordered = students
       .filter((student) => student.gender === gender && student.key)
@@ -234,12 +233,15 @@ export function buildBibMigration(students: BibStudent[], settings: BibSettings)
       ));
     let number = getBibStart(gender, settings);
     ordered.forEach((student) => {
+      while (assignedIds.has(formatBib(gender, number, settings).toUpperCase())) number += 1;
+      const newId = formatBib(gender, number, settings);
+      assignedIds.add(newId.toUpperCase());
       result.push({
         key: student.key as string,
         name: student.name || student.id,
         gender,
         oldId: student.id,
-        newId: formatBib(gender, number, settings),
+        newId,
       });
       number += 1;
     });
