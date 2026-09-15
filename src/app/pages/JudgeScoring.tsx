@@ -281,9 +281,7 @@ const [scoreSortOrder, setScoreSortOrder] = useState<'asc' | 'desc'>('asc');
   setAttemptCount(newAttemptCount);
 
   if (type === 'zone') {
-    if (az == null) {
-      setAz(newAttemptCount);
-    }
+    setAz(newAttemptCount);
   }
 
   if (type === 'top') {
@@ -845,6 +843,10 @@ const startCreateNew = () => {
     Top
   </button>
 </div>
+
+                <p className="text-center text-xs text-slate-500">
+                  Each button press records one attempt. Repeating Zone updates AZ and deducts another 0.1 point.
+                </p>
 
                 <div className="flex gap-3">
                   <button
