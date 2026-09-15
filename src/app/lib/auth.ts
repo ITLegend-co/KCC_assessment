@@ -1,17 +1,20 @@
 import { database } from './firebase';
 import { ref, get, update } from 'firebase/database';
 
+export type UserRole = 'administrator' | 'chief-judge' | 'judge' | 'registry' | 'coach';
+
 export interface User {
   username: string;
   password: string;
-  role: 'administrator' | 'chief-judge' | 'judge' | 'registry' | 'coach';
+  role: UserRole;
   createdAt: string;
   key?: string;
 }
 
 export interface CurrentUser {
   username: string;
-  role: 'administrator' | 'chief-judge' | 'judge' | 'registry' | 'coach';
+  role: UserRole;
+  key?: string;
 }
 
 // Login function
@@ -34,6 +37,7 @@ export const login = async (username: string, password: string): Promise<Current
     return {
       username: user.username,
       role: user.role,
+      key: userKey,
     };
   }
 

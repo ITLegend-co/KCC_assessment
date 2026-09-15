@@ -13,6 +13,11 @@ import { useRounds } from '../hooks/useRounds';
 import { getBoulderRange, useCompetitionSettings } from '../lib/competition';
 import { ErrorMessage, LoadingMessage, OfflineMessage } from '../components/StatusMessage';
 import { describeError } from '../lib/appError';
+import {
+  getAssignedBoulder,
+  isBoulderAssignmentEnabled,
+  useBoulderAssignmentSettings,
+} from '../lib/boulderAssignments';
 
 interface Student {
   id: string;
@@ -41,6 +46,11 @@ export default function JudgeScoring() {
   const [currentUser] = useState(() => getCurrentUser());
   const rounds = useRounds();
   const { settings: competitionSettings, loading: settingsLoading, error: settingsError } = useCompetitionSettings();
+  const {
+    settings: boulderAssignmentSettings,
+    loading: assignmentsLoading,
+    error: assignmentsError,
+  } = useBoulderAssignmentSettings();
   const canViewScores = currentUser?.role === 'administrator' || currentUser?.role === 'chief-judge';
   const canAccessJudging = currentUser?.role === 'administrator' || currentUser?.role === 'chief-judge' || currentUser?.role === 'judge';
 
@@ -77,6 +87,8 @@ const [scoreSortOrder, setScoreSortOrder] = useState<'asc' | 'desc'>('asc');
   const [dataError, setDataError] = useState('');
   const [actionError, setActionError] = useState('');
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const assignmentRequired = isBoulderAssignmentEnabled(currentUser?.role, boulderAssignmentSettings);
+  const assignedBoulder = getAssignedBoulder(currentUser, round, boulderAssignmentSettings);
 
   // Multi-step state
   const [currentStep, setCurrentStep] = useState(1);
@@ -132,6 +144,11 @@ const [scoreSortOrder, setScoreSortOrder] = useState<'asc' | 'desc'>('asc');
       unsubscribeScores();
     };
   }, []);
+
+  useEffect(() => {
+    if (!assignmentRequired || currentStep > 3) return;
+    setBoulder(assignedBoulder === null ? '' : String(assignedBoulder));
+  }, [assignedBoulder, assignmentRequired, currentStep, round]);
 
   useEffect(() => {
     const online = () => setIsOnline(true);
@@ -287,6 +304,16 @@ const [scoreSortOrder, setScoreSortOrder] = useState<'asc' | 'desc'>('asc');
   const handleSubmit = async (e: FormEvent) => {
   e.preventDefault();
   setActionError('');
+
+  if (assignmentsLoading || assignmentsError) {
+    setActionError(assignmentsError || 'Boulder assignments are still loading. Please wait before saving.');
+    return;
+  }
+
+  if (assignmentRequired && (assignedBoulder === null || Number(boulder) !== assignedBoulder)) {
+    setActionError(`You do not have a valid boulder assignment for ${round}. Ask an assignment manager to update it in Settings.`);
+    return;
+  }
 
   try {
     const existingVersions = scores.filter(
@@ -483,11 +510,20 @@ const startCreateNew = () => {
   
   const handleNextStep = () => {
   setActionError('');
+  if (assignmentsLoading || assignmentsError) {
+    setActionError(assignmentsError || 'Boulder assignments are still loading. Please wait.');
+    return;
+  }
   if (currentStep === 1) {
     if (!round) {
       setActionError('Please select a round.');
       return;
     }
+    if (assignmentRequired && assignedBoulder === null) {
+      setActionError(`No boulder is assigned to you for ${round}. Ask an assignment manager to assign one in Settings.`);
+      return;
+    }
+    if (assignmentRequired) setBoulder(String(assignedBoulder));
     setCurrentStep(2);
     return;
   }
@@ -503,6 +539,10 @@ const startCreateNew = () => {
 
   if (currentStep === 3) {
     const range = getBoulderRange(rounds, round, competitionSettings);
+    if (assignmentRequired && (assignedBoulder === null || Number(boulder) !== assignedBoulder)) {
+      setActionError(`Your assigned boulder for ${round} is unavailable. Ask an assignment manager to check Settings.`);
+      return;
+    }
     if (!boulder || Number(boulder) < range.start || Number(boulder) > range.end) {
       setActionError(`Please enter a boulder number from ${range.start} to ${range.end} for ${round}.`);
       return;
@@ -546,7 +586,7 @@ const startCreateNew = () => {
       setSelectedStudent(student.id);
     }
 
-    if (scannerMode === 'boulder') {
+    if (scannerMode === 'boulder' && !assignmentRequired) {
       const scannedBoulder = rawValue.startsWith('KCC:BOULDER:')
         ? rawValue.slice('KCC:BOULDER:'.length).trim()
         : rawValue.trim();
@@ -586,8 +626,8 @@ const startCreateNew = () => {
         </div>
 
         {!isOnline && <div className="mb-4"><OfflineMessage /></div>}
-        {(studentsLoading || scoresLoading || settingsLoading) && <div className="mb-4"><LoadingMessage text="Loading judging data…" /></div>}
-        {(dataError || settingsError) && <div className="mb-4"><ErrorMessage message={dataError || settingsError} /></div>}
+        {(studentsLoading || scoresLoading || settingsLoading || assignmentsLoading) && <div className="mb-4"><LoadingMessage text="Loading judging data…" /></div>}
+        {(dataError || settingsError || assignmentsError) && <div className="mb-4"><ErrorMessage message={dataError || settingsError || assignmentsError} /></div>}
         <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 md:p-8 mb-6">
           {actionError && <div className="mb-4"><ErrorMessage message={actionError} /></div>}
           <h2 className="text-2xl md:text-3xl font-bold text-slate-900 mb-6">
@@ -629,7 +669,7 @@ const startCreateNew = () => {
                   </label>
                   <select
                     value={round}
-                    onChange={(e) => setRound(e.target.value)}
+                    onChange={(e) => { setRound(e.target.value); setBoulder(''); }}
                     required
                     className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                   >
@@ -638,6 +678,7 @@ const startCreateNew = () => {
                       <option key={roundName} value={roundName}>{roundName}</option>
                     ))}
                   </select>
+                  {assignmentRequired && <p className="mt-2 text-sm text-indigo-700">Your assigned boulder will be loaded automatically for the selected round.</p>}
                 </div>
 
                 <button
@@ -683,15 +724,23 @@ const startCreateNew = () => {
             {currentStep === 3 && (
               <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} className="space-y-6">
                 <div className="rounded-lg bg-slate-50 p-4 text-sm"><strong>Round:</strong> {round}<span className="mx-3 text-slate-300">|</span><strong>Student:</strong> {getStudentName(selectedStudent)}</div>
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-700">Boulder Number</label>
-                  <div className="flex gap-2">
-                    <input type="number" min={getBoulderRange(rounds, round, competitionSettings).start} max={getBoulderRange(rounds, round, competitionSettings).end} value={boulder} onChange={(e) => setBoulder(e.target.value)} placeholder={`Boulder ${getBoulderRange(rounds, round, competitionSettings).start}–${getBoulderRange(rounds, round, competitionSettings).end}`} className="min-w-0 flex-1 rounded-lg border border-slate-300 px-4 py-3 focus:ring-2 focus:ring-emerald-500" />
-                    <button type="button" onClick={() => setScannerMode('boulder')} aria-label="Scan boulder QR" title="Scan boulder QR" className="rounded-lg bg-violet-600 p-3 text-white shadow-md hover:bg-violet-700">
-                      <Camera className="h-5 w-5" />
-                    </button>
+                {assignmentRequired ? (
+                  <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-5 text-center">
+                    <p className="text-sm font-semibold text-indigo-700">Your assigned boulder</p>
+                    <p className="mt-1 text-3xl font-bold text-indigo-950">Boulder {assignedBoulder ?? '—'}</p>
+                    <p className="mt-2 text-xs text-indigo-700">This assignment is controlled in Settings and cannot be changed here.</p>
                   </div>
-                </div>
+                ) : (
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-slate-700">Boulder Number</label>
+                    <div className="flex gap-2">
+                      <input type="number" min={getBoulderRange(rounds, round, competitionSettings).start} max={getBoulderRange(rounds, round, competitionSettings).end} value={boulder} onChange={(e) => setBoulder(e.target.value)} placeholder={`Boulder ${getBoulderRange(rounds, round, competitionSettings).start}–${getBoulderRange(rounds, round, competitionSettings).end}`} className="min-w-0 flex-1 rounded-lg border border-slate-300 px-4 py-3 focus:ring-2 focus:ring-emerald-500" />
+                      <button type="button" onClick={() => setScannerMode('boulder')} aria-label="Scan boulder QR" title="Scan boulder QR" className="rounded-lg bg-violet-600 p-3 text-white shadow-md hover:bg-violet-700">
+                        <Camera className="h-5 w-5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <div className="flex gap-3">
                   <button type="button" onClick={handlePreviousStep} className="flex-1 rounded-lg bg-slate-500 px-6 py-3 font-semibold text-white hover:bg-slate-600"><ChevronLeft className="mr-2 inline h-5 w-5" />Previous</button>
                   <button type="button" onClick={handleNextStep} className="flex-1 rounded-lg bg-emerald-600 px-6 py-3 font-semibold text-white hover:bg-emerald-700">Next<ChevronRight className="ml-2 inline h-5 w-5" /></button>

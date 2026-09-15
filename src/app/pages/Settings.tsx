@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
 import { BackButton } from '../components/BackButton';
-import { getCurrentUser, User } from '../lib/auth';
+import { getCurrentUser, type UserRole } from '../lib/auth';
 import { database } from '../lib/firebase';
-import { ref, get, set, update, remove } from 'firebase/database';
-import { Settings as SettingsIcon, Key, UserPlus, Trash2, Save, ListChecks, Plus, ArrowUp, ArrowDown, GraduationCap } from 'lucide-react';
+import { ref, get, set, update } from 'firebase/database';
+import { Settings as SettingsIcon, Key, UserPlus, Trash2, Save, ListChecks, Plus, ArrowUp, ArrowDown, GraduationCap, ClipboardCheck } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { DEFAULT_ROUNDS, normalizeRounds } from '../lib/rounds';
 import { AssessmentArchives } from '../components/AssessmentArchives';
-import { BoulderNumberingMode, DEFAULT_COMPETITION_SETTINGS } from '../lib/competition';
+import { BoulderNumberingMode, DEFAULT_COMPETITION_SETTINGS, getBoulderRange } from '../lib/competition';
 import { describeError } from '../lib/appError';
 import { ErrorMessage, LoadingMessage } from '../components/StatusMessage';
 import {
@@ -15,12 +15,33 @@ import {
   normalizeAssessmentResultFields,
   type AssessmentResultFields,
 } from '../lib/studentAssessment';
+import {
+  canManageBoulderAssignments,
+  DEFAULT_BOULDER_ASSIGNMENT_SETTINGS,
+  normalizeBoulderAssignmentSettings,
+  useBoulderAssignmentSettings,
+  type BoulderAssignmentSettings,
+} from '../lib/boulderAssignments';
+
+interface ManagedUser {
+  username: string;
+  role: UserRole;
+  createdAt: string;
+  key: string;
+}
 
 export default function Settings() {
   const navigate = useNavigate();
   const [currentUser] = useState(() => getCurrentUser());
+  const {
+    settings: savedBoulderAssignments,
+    loading: assignmentAccessLoading,
+    error: assignmentAccessError,
+  } = useBoulderAssignmentSettings();
+  const isAdministrator = currentUser?.role === 'administrator';
+  const hasAssignmentAccess = canManageBoulderAssignments(currentUser, savedBoulderAssignments);
 
-  const [users, setUsers] = useState<User[]>([]);
+  const [users, setUsers] = useState<ManagedUser[]>([]);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
@@ -43,15 +64,28 @@ export default function Settings() {
   const [assessmentResultFields, setAssessmentResultFields] = useState<AssessmentResultFields>(DEFAULT_ASSESSMENT_RESULT_FIELDS);
   const [assessmentDisplayError, setAssessmentDisplayError] = useState('');
   const [assessmentDisplaySuccess, setAssessmentDisplaySuccess] = useState('');
+  const [boulderAssignmentSettings, setBoulderAssignmentSettings] = useState<BoulderAssignmentSettings>(DEFAULT_BOULDER_ASSIGNMENT_SETTINGS);
+  const [assignmentError, setAssignmentError] = useState('');
+  const [assignmentSuccess, setAssignmentSuccess] = useState('');
+  const [assignmentSaving, setAssignmentSaving] = useState(false);
 
   useEffect(() => {
-    if (!currentUser || currentUser.role !== 'administrator') {
+    if (!currentUser) {
+      navigate('/login');
+      return;
+    }
+    if (assignmentAccessLoading || (assignmentAccessError && !isAdministrator)) return;
+    if (!hasAssignmentAccess) {
       navigate('/');
       return;
     }
     loadUsers();
     loadRounds();
-  }, [currentUser?.role, navigate]);
+  }, [assignmentAccessError, assignmentAccessLoading, currentUser?.role, hasAssignmentAccess, isAdministrator, navigate]);
+
+  useEffect(() => {
+    setBoulderAssignmentSettings(savedBoulderAssignments);
+  }, [savedBoulderAssignments]);
 
   const loadUsers = async () => {
     try {
@@ -60,12 +94,14 @@ export default function Settings() {
 
     if (snapshot.exists()) {
       const data = snapshot.val();
-      const usersList: User[] = Object.keys(data).map((key) => ({
-        ...data[key],
+      const usersList: ManagedUser[] = Object.keys(data).map((key) => ({
+        username: String(data[key].username || ''),
+        role: data[key].role as UserRole,
+        createdAt: String(data[key].createdAt || ''),
         key,
       }));
       setUsers(usersList);
-    }
+    } else setUsers([]);
     } catch (error) { const d = describeError(error, 'Unable to load users'); setDataError(`${d.message} — ${d.code}`); }
   };
 
@@ -158,10 +194,11 @@ export default function Settings() {
     }
 
     try {
-      const [scoresSnapshot, assessmentsSnapshot, settingsSnapshot] = await Promise.all([
+      const [scoresSnapshot, assessmentsSnapshot, settingsSnapshot, assignmentsSnapshot] = await Promise.all([
         get(ref(database, 'scores')),
         get(ref(database, 'studentAssessments')),
         get(ref(database, 'settings/competition/boulderCounts')),
+        get(ref(database, 'settings/boulderAssignments')),
       ]);
       const existingCounts = settingsSnapshot.val() || {};
       const renamed = cleanedItems
@@ -176,6 +213,27 @@ export default function Settings() {
         nextCounts[name] = Math.max(1, Number(boulderCounts[name] ?? existingCounts[name] ?? (originalName ? existingCounts[originalName] : 5)) || 5);
       });
       updates['settings/competition/boulderCounts'] = nextCounts;
+
+      const existingAssignments = normalizeBoulderAssignmentSettings(assignmentsSnapshot.val());
+      const nextAssignmentRecords: BoulderAssignmentSettings['assignments'] = Object.fromEntries(
+        Object.entries(existingAssignments.assignments).map(([userKey, assignment]) => {
+          const nextRounds: Record<string, number> = {};
+          cleanedItems.forEach(({ name, originalName }) => {
+            const previousValue = Number(
+              assignment.rounds?.[originalName || name] ?? assignment.rounds?.[name],
+            );
+            const range = getBoulderRange(cleanedRounds, name, {
+              numberingMode,
+              boulderCounts: nextCounts,
+            });
+            if (Number.isInteger(previousValue) && previousValue >= range.start && previousValue <= range.end) {
+              nextRounds[name] = previousValue;
+            }
+          });
+          return [userKey, { ...assignment, rounds: nextRounds }];
+        }),
+      );
+      updates['settings/boulderAssignments/assignments'] = nextAssignmentRecords;
       if (scoresSnapshot.exists()) Object.entries(scoresSnapshot.val() as Record<string, { round?: string }>).forEach(([key, score]) => {
         const match = renamed.find((item) => item.oldName === score.round);
         if (match) updates[`scores/${key}/round`] = match.newName;
@@ -188,7 +246,8 @@ export default function Settings() {
       setRounds(cleanedRounds);
       setRoundOrigins(cleanedRounds);
       setBoulderCounts(nextCounts);
-      setRoundSuccess('Rounds saved successfully');
+      setBoulderAssignmentSettings((current) => ({ ...current, assignments: nextAssignmentRecords }));
+      setRoundSuccess('Rounds saved successfully. Boulder assignments were kept where valid; review assignments after any range change.');
     } catch (error) {
       const details = describeError(error, 'Failed to save rounds');
       setRoundError(`${details.message} — ${details.code} — ${details.time}`);
@@ -204,6 +263,101 @@ export default function Settings() {
     } catch (error) {
       const details = describeError(error, 'Assessment result display could not be saved');
       setAssessmentDisplayError(`${details.message} — ${details.code} — ${details.time}`);
+    }
+  };
+
+  const handleAssignedBoulderChange = (user: ManagedUser, roundName: string, rawValue: string) => {
+    if (!user.key) return;
+    setBoulderAssignmentSettings((current) => {
+      const existing = current.assignments[user.key as string] || {
+        username: user.username,
+        role: user.role,
+        rounds: {},
+      };
+      const nextRounds = { ...existing.rounds };
+      if (rawValue) nextRounds[roundName] = Number(rawValue);
+      else delete nextRounds[roundName];
+      return {
+        ...current,
+        assignments: {
+          ...current.assignments,
+          [user.key as string]: {
+            username: user.username,
+            role: user.role,
+            rounds: nextRounds,
+          },
+        },
+      };
+    });
+    setAssignmentError('');
+    setAssignmentSuccess('');
+  };
+
+  const handleAssignmentManagerChange = (user: ManagedUser, enabled: boolean) => {
+    if (!user.key || !isAdministrator) return;
+    setBoulderAssignmentSettings((current) => {
+      const managers = { ...current.managers };
+      if (enabled) managers[user.key as string] = { username: user.username, enabled: true };
+      else delete managers[user.key as string];
+      return { ...current, managers };
+    });
+    setAssignmentError('');
+    setAssignmentSuccess('');
+  };
+
+  const handleSaveBoulderAssignments = async () => {
+    setAssignmentError('');
+    setAssignmentSuccess('');
+    setAssignmentSaving(true);
+
+    try {
+      const assignableUsers = users.filter((user) => user.role === 'judge' || user.role === 'coach');
+      const nextAssignments = { ...boulderAssignmentSettings.assignments };
+
+      assignableUsers.forEach((user) => {
+        if (!user.key) return;
+        const existing = nextAssignments[user.key] || {
+          username: user.username,
+          role: user.role,
+          rounds: {},
+        };
+        const validRounds: Record<string, number> = {};
+        rounds.forEach((roundName) => {
+          const range = getBoulderRange(rounds, roundName, { numberingMode, boulderCounts });
+          const value = Number(existing.rounds?.[roundName]);
+          if (Number.isInteger(value) && value >= range.start && value <= range.end) {
+            validRounds[roundName] = value;
+          }
+        });
+        nextAssignments[user.key] = {
+          username: user.username,
+          role: user.role,
+          rounds: validRounds,
+        };
+      });
+
+      const nextSettings: BoulderAssignmentSettings = {
+        ...boulderAssignmentSettings,
+        assignments: nextAssignments,
+      };
+
+      if (isAdministrator) {
+        const activeUserKeys = new Set(users.map((user) => user.key).filter(Boolean));
+        nextSettings.managers = Object.fromEntries(
+          Object.entries(nextSettings.managers).filter(([key, manager]) => activeUserKeys.has(key) && manager.enabled),
+        );
+        await set(ref(database, 'settings/boulderAssignments'), nextSettings);
+      } else {
+        await set(ref(database, 'settings/boulderAssignments/assignments'), nextAssignments);
+      }
+
+      setBoulderAssignmentSettings(nextSettings);
+      setAssignmentSuccess('Boulder assignments saved successfully');
+    } catch (error) {
+      const details = describeError(error, 'Boulder assignments could not be saved');
+      setAssignmentError(`${details.message} — ${details.code} — ${details.time}`);
+    } finally {
+      setAssignmentSaving(false);
     }
   };
 
@@ -290,16 +444,162 @@ export default function Settings() {
     }
 
     try {
-      const userRef = ref(database, `users/${userKey}`);
-      await remove(userRef);
+      await update(ref(database), {
+        [`users/${userKey}`]: null,
+        [`settings/boulderAssignments/assignments/${userKey}`]: null,
+        [`settings/boulderAssignments/managers/${userKey}`]: null,
+      });
       loadUsers();
     } catch (err) {
       alert('Failed to delete user');
     }
   };
 
-  if (!currentUser || currentUser.role !== 'administrator') {
+  if (!currentUser) {
     return null;
+  }
+
+  if (assignmentAccessLoading) {
+    return <div className="min-h-screen bg-slate-100 p-4 md:p-6"><div className="mx-auto max-w-4xl"><LoadingMessage text="Checking settings access…" /></div></div>;
+  }
+
+  if (!hasAssignmentAccess) {
+    if (assignmentAccessError) {
+      return <div className="min-h-screen bg-slate-100 p-4 md:p-6"><div className="mx-auto max-w-4xl"><BackButton /><div className="mt-6"><ErrorMessage message={assignmentAccessError} /></div></div></div>;
+    }
+    return null;
+  }
+
+  const assignmentTargets = users.filter((user) => user.role === 'judge' || user.role === 'coach');
+  const permissionCandidates = users.filter((user) => user.role !== 'administrator');
+  const getUserAssignment = (user: ManagedUser) => {
+    if (user.key && boulderAssignmentSettings.assignments[user.key]) {
+      return boulderAssignmentSettings.assignments[user.key];
+    }
+    return Object.values(boulderAssignmentSettings.assignments).find(
+      (assignment) => assignment.username.toLowerCase() === user.username.toLowerCase(),
+    );
+  };
+
+  const assignmentSection = (
+    <section className="order-2 border-b border-slate-200 pb-6 mb-6">
+      <div className="mb-2 flex items-center gap-2">
+        <ClipboardCheck className="h-5 w-5 text-indigo-700" />
+        <h3 className="text-xl font-bold text-slate-900">Judge & Coach Boulder Assignments</h3>
+      </div>
+      <p className="mb-4 text-sm text-slate-600">
+        Assign one boulder to each judge or coach for every round. When assignment mode is enabled, they cannot enter or scan a different boulder.
+      </p>
+
+      {isAdministrator ? (
+        <div className="mb-5 grid gap-3 sm:grid-cols-2">
+          <label className="flex min-h-14 items-center gap-3 rounded-xl border border-slate-200 p-4 hover:bg-slate-50">
+            <input
+              type="checkbox"
+              checked={boulderAssignmentSettings.judgesEnabled}
+              onChange={(event) => setBoulderAssignmentSettings((current) => ({ ...current, judgesEnabled: event.target.checked }))}
+              className="h-5 w-5"
+            />
+            <span><strong className="block text-slate-900">Enable for Judges</strong><span className="text-xs text-slate-600">Judge panel uses the assigned boulder.</span></span>
+          </label>
+          <label className="flex min-h-14 items-center gap-3 rounded-xl border border-slate-200 p-4 hover:bg-slate-50">
+            <input
+              type="checkbox"
+              checked={boulderAssignmentSettings.coachesEnabled}
+              onChange={(event) => setBoulderAssignmentSettings((current) => ({ ...current, coachesEnabled: event.target.checked }))}
+              className="h-5 w-5"
+            />
+            <span><strong className="block text-slate-900">Enable for Coaches</strong><span className="text-xs text-slate-600">Student Assessment uses the assigned boulder.</span></span>
+          </label>
+        </div>
+      ) : (
+        <div className="mb-5 grid gap-2 text-sm sm:grid-cols-2">
+          <div className={`rounded-lg border p-3 ${boulderAssignmentSettings.judgesEnabled ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-slate-50 text-slate-600'}`}>Judge assignments: <strong>{boulderAssignmentSettings.judgesEnabled ? 'Enabled' : 'Disabled'}</strong></div>
+          <div className={`rounded-lg border p-3 ${boulderAssignmentSettings.coachesEnabled ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-slate-50 text-slate-600'}`}>Coach assignments: <strong>{boulderAssignmentSettings.coachesEnabled ? 'Enabled' : 'Disabled'}</strong></div>
+        </div>
+      )}
+
+      {isAdministrator && (
+        <fieldset className="mb-5 rounded-xl border border-slate-200 p-4">
+          <legend className="px-2 font-bold text-slate-800">Who can manage assignments</legend>
+          <p className="mb-3 text-sm text-slate-600">Administrators always have access. Selected users see only this assignment section in Settings.</p>
+          {permissionCandidates.length ? <div className="grid gap-2 sm:grid-cols-2">
+            {permissionCandidates.map((user) => (
+              <label key={user.key || user.username} className="flex min-h-11 items-center gap-3 rounded-lg border border-slate-200 px-3 hover:bg-slate-50">
+                <input
+                  type="checkbox"
+                  checked={Boolean(user.key && boulderAssignmentSettings.managers[user.key]?.enabled)}
+                  onChange={(event) => handleAssignmentManagerChange(user, event.target.checked)}
+                  className="h-5 w-5"
+                />
+                <span className="min-w-0"><strong className="block truncate text-slate-800">{user.username}</strong><span className="text-xs capitalize text-slate-500">{user.role.replace('-', ' ')}</span></span>
+              </label>
+            ))}
+          </div> : <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-500">Create a user before granting assignment access.</p>}
+        </fieldset>
+      )}
+
+      <div className="space-y-4">
+        {assignmentTargets.map((user) => {
+          const assignment = getUserAssignment(user);
+          const enabledForRole = user.role === 'judge'
+            ? boulderAssignmentSettings.judgesEnabled
+            : boulderAssignmentSettings.coachesEnabled;
+          return (
+            <article key={user.key || user.username} className="rounded-xl border border-slate-200 p-4">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div><p className="font-bold text-slate-900">{user.username}</p><p className="text-sm capitalize text-slate-500">{user.role.replace('-', ' ')}</p></div>
+                <span className={`rounded-full px-3 py-1 text-xs font-semibold ${enabledForRole ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>{enabledForRole ? 'Assignment enforced' : 'Prepared only'}</span>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {rounds.map((roundName) => {
+                  const range = getBoulderRange(rounds, roundName, { numberingMode, boulderCounts });
+                  const options = Array.from({ length: range.count }, (_, index) => range.start + index);
+                  const selectedValue = assignment?.rounds?.[roundName] ?? '';
+                  return (
+                    <label key={roundName} className="text-sm font-semibold text-slate-700">
+                      {roundName}
+                      <select
+                        value={selectedValue}
+                        onChange={(event) => handleAssignedBoulderChange(user, roundName, event.target.value)}
+                        className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 font-normal text-slate-900"
+                      >
+                        <option value="">Not assigned</option>
+                        {options.map((number) => <option key={number} value={number}>Boulder {number}</option>)}
+                      </select>
+                    </label>
+                  );
+                })}
+              </div>
+            </article>
+          );
+        })}
+        {!assignmentTargets.length && !isLoading && <p className="rounded-lg bg-slate-50 p-4 text-sm text-slate-500">Create Judge or Coach users before assigning boulders.</p>}
+      </div>
+
+      <p className="mt-4 text-xs text-slate-500">If you change round names, order, boulder counts, or numbering mode, save Round & Boulder Settings before reviewing these assignments.</p>
+      {assignmentError && <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{assignmentError}</div>}
+      {assignmentSuccess && <div className="mt-4 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700">{assignmentSuccess}</div>}
+      <button type="button" disabled={assignmentSaving} onClick={() => void handleSaveBoulderAssignments()} className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-6 font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto">
+        <Save className="h-5 w-5" /> {assignmentSaving ? 'Saving…' : 'Save Boulder Assignments'}
+      </button>
+    </section>
+  );
+
+  if (!isAdministrator) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:p-6">
+        <div className="mx-auto max-w-4xl">
+          <div className="mb-6"><BackButton /></div>
+          <main className="rounded-xl bg-white p-4 shadow-lg sm:p-6 md:p-8">
+            {isLoading && <div className="mb-4"><LoadingMessage text="Loading boulder assignments…" /></div>}
+            {dataError && <div className="mb-4"><ErrorMessage message={dataError} /></div>}
+            <div className="mb-6 flex items-center gap-3"><SettingsIcon className="h-8 w-8 text-slate-700" /><h2 className="text-2xl font-bold text-slate-900 md:text-3xl">Boulder Assignment Settings</h2></div>
+            {assignmentSection}
+          </main>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -311,7 +611,7 @@ export default function Settings() {
 
         <div className="flex flex-col bg-white rounded-xl shadow-lg p-4 sm:p-6 md:p-8 mb-6">
           {isLoading && <div className="mb-4"><LoadingMessage text="Loading settings…" /></div>}
-          {dataError && <div className="mb-4"><ErrorMessage message={dataError} /></div>}
+          {(dataError || assignmentAccessError) && <div className="mb-4"><ErrorMessage message={dataError || assignmentAccessError} /></div>}
           <div className="order-0 flex items-center gap-3 mb-6">
             <SettingsIcon className="w-8 h-8 text-slate-700" />
             <h2 className="text-2xl md:text-3xl font-bold text-slate-900">
@@ -319,7 +619,7 @@ export default function Settings() {
             </h2>
           </div>
 
-          <section className="order-2 border-b border-slate-200 pb-6 mb-6">
+          <section className="order-3 border-b border-slate-200 pb-6 mb-6">
             <div className="mb-2 flex items-center gap-2">
               <GraduationCap className="h-5 w-5 text-cyan-700" />
               <h3 className="text-xl font-bold text-slate-900">Student Assessment Result Display</h3>
@@ -342,10 +642,10 @@ export default function Settings() {
             <button type="button" onClick={() => void handleSaveAssessmentDisplay()} className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-cyan-600 px-6 font-semibold text-white hover:bg-cyan-700 sm:w-auto"><Save className="h-5 w-5" /> Save Assessment Display</button>
           </section>
 
-          <div className="order-3"><AssessmentArchives username={currentUser.username} /></div>
+          <div className="order-4"><AssessmentArchives username={currentUser.username} /></div>
 
           {/* Change Password Section */}
-          <div className="order-4 border-b border-slate-200 pb-6 mb-6">
+          <div className="order-5 border-b border-slate-200 pb-6 mb-6">
             <div className="flex items-center gap-2 mb-4">
               <Key className="w-5 h-5 text-slate-600" />
               <h3 className="text-xl font-bold text-slate-900">Change Password</h3>
@@ -468,8 +768,10 @@ export default function Settings() {
             </button>
           </div>
 
+          {assignmentSection}
+
           {/* Create User Section */}
-          <div className="order-5 border-b border-slate-200 pb-6 mb-6">
+          <div className="order-6 border-b border-slate-200 pb-6 mb-6">
             <div className="flex items-center gap-2 mb-4">
               <UserPlus className="w-5 h-5 text-slate-600" />
               <h3 className="text-xl font-bold text-slate-900">Create New User</h3>
@@ -545,7 +847,7 @@ export default function Settings() {
           </div>
 
           {/* Users List */}
-          <div className="order-6">
+          <div className="order-7">
             <h3 className="text-xl font-bold text-slate-900 mb-4">Existing Users</h3>
 
             <div className="space-y-3 sm:hidden">{users.map((user) => <article key={user.key} className="rounded-xl border border-slate-200 p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-bold text-slate-900">{user.username}</p><p className="text-sm capitalize text-slate-600">{user.role.replace('-', ' ')}</p><p className="text-xs text-slate-500">Created {new Date(user.createdAt).toLocaleDateString()}</p></div>{user.username !== 'admin' && <button aria-label={`Delete user ${user.username}`} onClick={() => handleDeleteUser(user.key || '', user.username)} className="flex h-11 w-11 items-center justify-center rounded-lg bg-red-100 text-red-700"><Trash2 className="h-5 w-5" /></button>}</div></article>)}</div>

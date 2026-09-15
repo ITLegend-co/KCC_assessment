@@ -20,6 +20,11 @@ import { getBoulderRange, useCompetitionSettings } from '../lib/competition';
 import { useStudentAssessments } from '../hooks/useStudentAssessments';
 import { describeError } from '../lib/appError';
 import {
+  getAssignedBoulder,
+  isBoulderAssignmentEnabled,
+  useBoulderAssignmentSettings,
+} from '../lib/boulderAssignments';
+import {
   ASSESSMENT_ELEMENTS,
   ASSESSMENT_RATING_LABELS,
   getLatestStudentAssessments,
@@ -45,6 +50,11 @@ export default function StudentAssessment() {
   const [currentUser] = useState(() => getCurrentUser());
   const rounds = useRounds();
   const { settings: competitionSettings, loading: settingsLoading, error: settingsError } = useCompetitionSettings();
+  const {
+    settings: boulderAssignmentSettings,
+    loading: assignmentsLoading,
+    error: assignmentsError,
+  } = useBoulderAssignmentSettings();
   const { assessments, loading: assessmentsLoading, error: assessmentsError } = useStudentAssessments();
 
   const [students, setStudents] = useState<AssessmentStudent[]>([]);
@@ -63,6 +73,8 @@ export default function StudentAssessment() {
   const [remarks, setRemarks] = useState('');
   const [editingExisting, setEditingExisting] = useState(false);
   const [scannerMode, setScannerMode] = useState<'student' | 'boulder' | null>(null);
+  const assignmentRequired = isBoulderAssignmentEnabled(currentUser?.role, boulderAssignmentSettings);
+  const assignedBoulder = getAssignedBoulder(currentUser, round, boulderAssignmentSettings);
 
   useEffect(() => {
     if (!currentUser) {
@@ -96,6 +108,11 @@ export default function StudentAssessment() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!assignmentRequired || currentStep > 3) return;
+    setBoulder(assignedBoulder === null ? '' : String(assignedBoulder));
+  }, [assignedBoulder, assignmentRequired, currentStep, round]);
+
   const selectedStudentRecord = useMemo(
     () => students.find((student) => student.id === selectedStudent),
     [selectedStudent, students],
@@ -105,7 +122,9 @@ export default function StudentAssessment() {
 
   const validateBoulder = () => {
     const value = Number(boulder);
-    return Number.isInteger(value) && value >= boulderRange.start && value <= boulderRange.end;
+    const insideRound = Number.isInteger(value) && value >= boulderRange.start && value <= boulderRange.end;
+    if (assignmentRequired) return insideRound && assignedBoulder !== null && value === assignedBoulder;
+    return insideRound;
   };
 
   const prepareEvaluation = () => {
@@ -130,8 +149,17 @@ export default function StudentAssessment() {
 
   const handleNext = () => {
     setActionError('');
+    if (assignmentsLoading || assignmentsError) {
+      setActionError(assignmentsError || 'Boulder assignments are still loading. Please wait.');
+      return;
+    }
     if (currentStep === 1) {
       if (!round) { setActionError('Select a round to continue.'); return; }
+      if (assignmentRequired && assignedBoulder === null) {
+        setActionError(`No boulder is assigned to you for ${round}. Ask an assignment manager to assign one in Settings.`);
+        return;
+      }
+      if (assignmentRequired) setBoulder(String(assignedBoulder));
       setCurrentStep(2);
       return;
     }
@@ -142,7 +170,9 @@ export default function StudentAssessment() {
     }
     if (currentStep === 3) {
       if (!validateBoulder()) {
-        setActionError(`Select Boulder ${boulderRange.start}–${boulderRange.end} for ${round}.`);
+        setActionError(assignmentRequired
+          ? `Your assigned boulder for ${round} is unavailable. Ask an assignment manager to check Settings.`
+          : `Select Boulder ${boulderRange.start}–${boulderRange.end} for ${round}.`);
         return;
       }
       prepareEvaluation();
@@ -164,13 +194,19 @@ export default function StudentAssessment() {
   const handleSave = async () => {
     setActionError('');
     setSuccessMessage('');
+    if (assignmentsLoading || assignmentsError) {
+      setActionError(assignmentsError || 'Boulder assignments are still loading. Please wait before saving.');
+      return;
+    }
     const missing = ASSESSMENT_ELEMENTS.filter((element) => ratings[element.id] === undefined);
     if (missing.length) {
       setActionError(`Complete all 12 elements. Select 1–5 or Not Observed for: ${missing.map((item) => item.label).join(', ')}.`);
       return;
     }
     if (!selectedStudentRecord || !validateBoulder() || !round || !currentUser) {
-      setActionError('The round, student, or boulder selection is no longer valid. Please select them again.');
+      setActionError(assignmentRequired
+        ? 'Your assigned boulder is no longer valid. Ask an assignment manager to check Settings.'
+        : 'The round, student, or boulder selection is no longer valid. Please select them again.');
       return;
     }
 
@@ -244,7 +280,7 @@ export default function StudentAssessment() {
       else setSelectedStudent(student.id);
     }
 
-    if (scannerMode === 'boulder') {
+    if (scannerMode === 'boulder' && !assignmentRequired) {
       const scannedBoulder = rawValue.startsWith('KCC:BOULDER:')
         ? rawValue.slice('KCC:BOULDER:'.length).trim()
         : rawValue.trim();
@@ -265,8 +301,8 @@ export default function StudentAssessment() {
       <div className="mx-auto max-w-4xl">
         <div className="mb-6"><BackButton /></div>
         {!isOnline && <div className="mb-4"><OfflineMessage /></div>}
-        {(studentsLoading || assessmentsLoading || settingsLoading) && <div className="mb-4"><LoadingMessage text="Loading student assessment…" /></div>}
-        {(dataError || assessmentsError || settingsError) && <div className="mb-4"><ErrorMessage message={dataError || assessmentsError || settingsError} /></div>}
+        {(studentsLoading || assessmentsLoading || settingsLoading || assignmentsLoading) && <div className="mb-4"><LoadingMessage text="Loading student assessment…" /></div>}
+        {(dataError || assessmentsError || settingsError || assignmentsError) && <div className="mb-4"><ErrorMessage message={dataError || assessmentsError || settingsError || assignmentsError} /></div>}
 
         <main className="rounded-xl bg-white p-4 shadow-lg sm:p-6 md:p-8">
           <div className="mb-6 flex items-center gap-3">
@@ -297,6 +333,7 @@ export default function StudentAssessment() {
                 <option value="">-- Select Round --</option>
                 {rounds.map((name) => <option key={name} value={name}>{name}</option>)}
               </select>
+              {assignmentRequired && <p className="mt-2 text-sm text-indigo-700">Your assigned boulder will be loaded automatically for the selected round.</p>}
             </div>
             <button type="button" onClick={handleNext} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-cyan-600 px-6 font-semibold text-white hover:bg-cyan-700">Next <ChevronRight className="h-5 w-5" /></button>
           </section>}
@@ -318,14 +355,22 @@ export default function StudentAssessment() {
 
           {currentStep === 3 && <section className="space-y-6">
             <div className="rounded-lg bg-slate-50 p-4 text-sm"><strong>{selectedStudentRecord?.name}</strong><span className="mx-2 text-slate-300">|</span>{round}</div>
-            <div>
-              <label htmlFor="assessment-boulder" className="mb-2 block text-sm font-semibold text-slate-700">Boulder Number</label>
-              <p className="mb-2 text-sm text-slate-500">Available for {round}: Boulder {boulderRange.start}–{boulderRange.end}</p>
-              <div className="flex gap-2">
-                <input id="assessment-boulder" type="number" min={boulderRange.start} max={boulderRange.end} value={boulder} onChange={(event) => setBoulder(event.target.value)} placeholder={`Enter ${boulderRange.start}–${boulderRange.end}`} className="min-w-0 flex-1 rounded-lg border border-slate-300 px-4 py-3 focus:ring-2 focus:ring-cyan-500" />
-                <button type="button" onClick={() => setScannerMode('boulder')} aria-label="Scan boulder QR" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-violet-600 text-white hover:bg-violet-700"><Camera className="h-5 w-5" /></button>
+            {assignmentRequired ? (
+              <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-5 text-center">
+                <p className="text-sm font-semibold text-indigo-700">Your assigned boulder</p>
+                <p className="mt-1 text-3xl font-bold text-indigo-950">Boulder {assignedBoulder ?? '—'}</p>
+                <p className="mt-2 text-xs text-indigo-700">This assignment is controlled in Settings and cannot be changed here.</p>
               </div>
-            </div>
+            ) : (
+              <div>
+                <label htmlFor="assessment-boulder" className="mb-2 block text-sm font-semibold text-slate-700">Boulder Number</label>
+                <p className="mb-2 text-sm text-slate-500">Available for {round}: Boulder {boulderRange.start}–{boulderRange.end}</p>
+                <div className="flex gap-2">
+                  <input id="assessment-boulder" type="number" min={boulderRange.start} max={boulderRange.end} value={boulder} onChange={(event) => setBoulder(event.target.value)} placeholder={`Enter ${boulderRange.start}–${boulderRange.end}`} className="min-w-0 flex-1 rounded-lg border border-slate-300 px-4 py-3 focus:ring-2 focus:ring-cyan-500" />
+                  <button type="button" onClick={() => setScannerMode('boulder')} aria-label="Scan boulder QR" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-violet-600 text-white hover:bg-violet-700"><Camera className="h-5 w-5" /></button>
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <button type="button" onClick={handlePrevious} className="flex min-h-12 items-center justify-center gap-2 rounded-lg bg-slate-500 px-4 font-semibold text-white hover:bg-slate-600"><ChevronLeft className="h-5 w-5" /> Previous</button>
               <button type="button" onClick={handleNext} className="flex min-h-12 items-center justify-center gap-2 rounded-lg bg-cyan-600 px-4 font-semibold text-white hover:bg-cyan-700">Next <ChevronRight className="h-5 w-5" /></button>
@@ -367,9 +412,9 @@ export default function StudentAssessment() {
 
           {currentStep === 5 && <section className="space-y-6">
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-center text-emerald-800"><CheckCircle2 className="mx-auto mb-2 h-10 w-10" /><p className="font-bold">Assessment saved successfully</p><p className="mt-1 text-sm">{successMessage}</p></div>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className={`grid gap-3 ${assignmentRequired ? 'sm:grid-cols-2' : 'sm:grid-cols-3'}`}>
               <button type="button" onClick={nextStudent} className="min-h-12 rounded-lg bg-blue-600 px-4 py-3 font-semibold text-white hover:bg-blue-700">Keep Round + Boulder<br />Next Student</button>
-              <button type="button" onClick={nextBoulder} className="min-h-12 rounded-lg bg-violet-600 px-4 py-3 font-semibold text-white hover:bg-violet-700">Keep Round + Student<br />Next Boulder</button>
+              {!assignmentRequired && <button type="button" onClick={nextBoulder} className="min-h-12 rounded-lg bg-violet-600 px-4 py-3 font-semibold text-white hover:bg-violet-700">Keep Round + Student<br />Next Boulder</button>}
               <button type="button" onClick={startNew} className="min-h-12 rounded-lg bg-cyan-600 px-4 py-3 font-semibold text-white hover:bg-cyan-700">Start New Selection</button>
             </div>
           </section>}

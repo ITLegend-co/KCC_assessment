@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { UserPlus, ClipboardCheck, Trophy, LogOut, Settings, QrCode, GraduationCap } from 'lucide-react';
 import { getCurrentUser, logout } from '../lib/auth';
+import { canManageBoulderAssignments, useBoulderAssignmentSettings } from '../lib/boulderAssignments';
 
 export default function Home() {
   const navigate = useNavigate();
   const [currentUser] = useState(() => getCurrentUser());
+  const { settings: boulderAssignmentSettings } = useBoulderAssignmentSettings();
 
   useEffect(() => {
     if (!currentUser) {
@@ -31,7 +33,7 @@ export default function Home() {
     currentUser.role === 'chief-judge' ||
     currentUser.role === 'judge';
 
-  const canAccessSettings = currentUser.role === 'administrator';
+  const canAccessSettings = canManageBoulderAssignments(currentUser, boulderAssignmentSettings);
   const canAccessAssessment =
     currentUser.role === 'administrator' ||
     currentUser.role === 'coach';
@@ -130,7 +132,7 @@ export default function Home() {
                 className="flex items-center justify-center gap-3 w-full p-3 bg-slate-600 hover:bg-slate-700 text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg"
               >
                 <Settings className="w-5 h-5" />
-                Settings
+                {currentUser.role === 'administrator' ? 'Settings' : 'Boulder Assignments'}
               </Link>
             )}
 
