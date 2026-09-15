@@ -200,7 +200,7 @@ export default function StudentAssessment() {
     }
     const missing = ASSESSMENT_ELEMENTS.filter((element) => ratings[element.id] === undefined);
     if (missing.length) {
-      setActionError(`Complete all 12 elements. Select 1–5 or Not Observed for: ${missing.map((item) => item.label).join(', ')}.`);
+      setActionError(`Complete all ${ASSESSMENT_ELEMENTS.length} elements. Select 1–5 or Not Observed for: ${missing.map((item) => item.label).join(', ')}.`);
       return;
     }
     if (!selectedStudentRecord || !validateBoulder() || !round || !currentUser) {
@@ -309,7 +309,7 @@ export default function StudentAssessment() {
             <GraduationCap className="h-8 w-8 text-cyan-700" />
             <div>
               <h1 className="text-2xl font-bold text-slate-900 md:text-3xl">Student Assessment</h1>
-              <p className="text-sm text-slate-600">Coach technical evaluation based on the 12 KCC climbing elements.</p>
+              <p className="text-sm text-slate-600">Coach technical evaluation based on the {ASSESSMENT_ELEMENTS.length} KCC climbing elements.</p>
             </div>
           </div>
 

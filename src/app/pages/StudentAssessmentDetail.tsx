@@ -103,7 +103,7 @@ export default function StudentAssessmentDetail() {
               <div className="rounded-xl bg-slate-50 p-4"><p className="text-sm text-slate-500">Overall Average</p><p className="mt-2 text-2xl font-bold text-slate-900">{summary.overallAverage?.toFixed(2) || '—'} <span className="text-base text-slate-500">/ 5.00</span></p></div>
               <div className="rounded-xl bg-slate-50 p-4"><p className="text-sm text-slate-500">Boulders Assessed</p><p className="mt-2 text-2xl font-bold text-slate-900">{summary.assessedBoulders} <span className="text-base text-slate-500">/ {configuredBoulders.length || '—'}</span></p></div>
             </div>
-            <p className="mt-3 text-xs text-slate-500">Overall average gives equal weight to each of the 12 climbing-element averages. Not Observed entries are excluded.</p>
+            <p className="mt-3 text-xs text-slate-500">Overall average gives equal weight to each active climbing-element average. Not Observed entries are excluded.</p>
           </header>
 
           <section className="overflow-hidden rounded-xl bg-white shadow-lg">

@@ -3,11 +3,12 @@ import { useNavigate } from 'react-router';
 import { BackButton } from '../components/BackButton';
 import { Save, Edit2, Trash2, ArrowUpDown, QrCode, X } from 'lucide-react';
 import { database } from '../lib/firebase';
-import { ref, push, update, onValue, get } from 'firebase/database';
+import { ref, push, update, onValue, get, runTransaction } from 'firebase/database';
 import { getCurrentUser } from '../lib/auth';
 import { QrCodeCard } from '../components/QrCodeCard';
 import { ErrorMessage, LoadingMessage, OfflineMessage } from '../components/StatusMessage';
 import { describeError } from '../lib/appError';
+import { generateAvailableBib, useBibSettings } from '../lib/bib';
 
 interface Student {
   id: string;
@@ -26,6 +27,11 @@ export default function StudentRegistration() {
   const navigate = useNavigate();
   const [currentUser] = useState(() => getCurrentUser());
   const canAccessRegistration = currentUser?.role === 'administrator' || currentUser?.role === 'registry';
+  const {
+    settings: bibSettings,
+    loading: bibSettingsLoading,
+    error: bibSettingsError,
+  } = useBibSettings();
 
   useEffect(() => {
     if (!currentUser) {
@@ -103,31 +109,29 @@ export default function StudentRegistration() {
     }
   }, [selectedStudents, students]);
 
-  const generateID = (gender: 'male' | 'female') => {
-  const prefix = gender === 'male' ? 'M' : 'F';
-
-  const genderStudents = students.filter(
-    (student) => student.gender === gender
-  );
-
-  const usedNumbers = new Set(genderStudents.map((student) => Number(student.id.replace(/^[A-Za-z]+/, ''))).filter(Number.isFinite));
-  let nextNumber = 1;
-  while (usedNumbers.has(nextNumber)) nextNumber += 1;
-
-  return `${prefix}${String(nextNumber).padStart(2, '0')}`;
-};
-
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setActionError('');
+
+    if (bibSettingsLoading || bibSettingsError) {
+      setActionError(bibSettingsError || 'BIB settings are still loading. Please wait before saving.');
+      return;
+    }
 
     try {
     if (editKey !== null) {
       // Update existing student
       const studentRef = ref(database, `students/${editKey}`);
-      const existingStudent = students.find((student) => student.key === editKey);
+      const studentsSnapshot = await get(ref(database, 'students'));
+      const latestStudents: Student[] = studentsSnapshot.exists()
+        ? Object.entries(studentsSnapshot.val() as Record<string, Omit<Student, 'key'>>).map(([key, student]) => ({ ...student, key }))
+        : [];
+      const existingStudent = latestStudents.find((student) => student.key === editKey);
+      if (!existingStudent) throw new Error('The student record no longer exists. Refresh the page and try again.');
       const nextGender = formData.gender as 'male' | 'female';
-      const nextId = existingStudent && existingStudent.gender !== nextGender ? generateID(nextGender) : existingStudent?.id;
+      const nextId = existingStudent.gender !== nextGender
+        ? generateAvailableBib(latestStudents, nextGender, bibSettings, editKey)
+        : existingStudent.id;
       const updatedData = {
         id: nextId,
         name: formData.name,
@@ -137,7 +141,7 @@ export default function StudentRegistration() {
         gender: formData.gender,
       };
       
-      if (existingStudent && nextId && nextId !== existingStudent.id) {
+      if (nextId !== existingStudent.id) {
         const [scoresSnapshot, assessmentsSnapshot] = await Promise.all([
           get(ref(database, 'scores')),
           get(ref(database, 'studentAssessments')),
@@ -161,16 +165,29 @@ export default function StudentRegistration() {
     } else {
       // Add new student
       const studentsRef = ref(database, 'students');
+      const newStudentKey = push(studentsRef).key;
+      if (!newStudentKey) throw new Error('A student record key could not be created.');
       const newStudent = {
-  id: generateID(formData.gender as 'male' | 'female'),
         name: formData.name,
         school: formData.school,
         class: formData.class,
         age: formData.age,
         gender: formData.gender,
       };
-      
-      await push(studentsRef, newStudent);
+
+      const result = await runTransaction(studentsRef, (currentStudents) => {
+        const current = currentStudents && typeof currentStudents === 'object'
+          ? currentStudents as Record<string, Omit<Student, 'key'>>
+          : {};
+        const latestStudents: Student[] = Object.entries(current).map(([key, student]) => ({ ...student, key }));
+        const id = generateAvailableBib(
+          latestStudents,
+          formData.gender as 'male' | 'female',
+          bibSettings,
+        );
+        return { ...current, [newStudentKey]: { ...newStudent, id } };
+      });
+      if (!result.committed) throw new Error('The BIB number could not be reserved. Please try again.');
     }
 
     setFormData({ name: '', school: '', class: '', age: '', gender: '' });
@@ -313,6 +330,8 @@ export default function StudentRegistration() {
         </div>
 
         {!isOnline && <div className="mb-4"><OfflineMessage /></div>}
+        {bibSettingsLoading && <div className="mb-4"><LoadingMessage text="Loading BIB number settings…" /></div>}
+        {bibSettingsError && <div className="mb-4"><ErrorMessage message={bibSettingsError} /></div>}
         <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 md:p-8 mb-6">
           <h2 className="text-2xl md:text-3xl font-bold text-slate-900 mb-6">
             Student Contestant Registration
@@ -402,7 +421,8 @@ export default function StudentRegistration() {
 
             <button
               type="submit"
-              className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors shadow-md hover:shadow-lg"
+              disabled={bibSettingsLoading || Boolean(bibSettingsError)}
+              className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors shadow-md hover:shadow-lg disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
             >
               <Save className="w-5 h-5" />
               {editKey ? 'Update Student' : 'Save Student'}

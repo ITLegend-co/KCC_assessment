@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { BackButton } from '../components/BackButton';
 import { getCurrentUser, type UserRole } from '../lib/auth';
 import { database } from '../lib/firebase';
 import { ref, get, set, update } from 'firebase/database';
-import { Settings as SettingsIcon, UserPlus, Trash2, Save, ListChecks, Plus, ArrowUp, ArrowDown, GraduationCap, ClipboardCheck } from 'lucide-react';
+import { Settings as SettingsIcon, UserPlus, Trash2, Save, ListChecks, Plus, ArrowUp, ArrowDown, GraduationCap, ClipboardCheck, Hash, AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { DEFAULT_ROUNDS, normalizeRounds } from '../lib/rounds';
 import { AssessmentArchives } from '../components/AssessmentArchives';
@@ -23,6 +23,15 @@ import {
   type BoulderAssignmentSettings,
 } from '../lib/boulderAssignments';
 import { AccountPasswordSection, AdminPasswordResetSection } from '../components/PasswordManagement';
+import {
+  buildBibMigration,
+  DEFAULT_BIB_SETTINGS,
+  formatBib,
+  normalizeBibSettings,
+  validateBibSettings,
+  type BibSettings,
+  type BibStudent,
+} from '../lib/bib';
 
 interface ManagedUser {
   username: string;
@@ -41,6 +50,7 @@ export default function Settings() {
   } = useBoulderAssignmentSettings();
   const isAdministrator = currentUser?.role === 'administrator';
   const hasAssignmentAccess = canManageBoulderAssignments(currentUser, savedBoulderAssignments);
+  const initialSettingsLoadStarted = useRef(false);
 
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [newUsername, setNewUsername] = useState('');
@@ -64,6 +74,12 @@ export default function Settings() {
   const [assignmentError, setAssignmentError] = useState('');
   const [assignmentSuccess, setAssignmentSuccess] = useState('');
   const [assignmentSaving, setAssignmentSaving] = useState(false);
+  const [bibSettings, setBibSettings] = useState<BibSettings>(DEFAULT_BIB_SETTINGS);
+  const [registeredStudents, setRegisteredStudents] = useState<BibStudent[]>([]);
+  const [changeCurrentBibs, setChangeCurrentBibs] = useState(false);
+  const [bibError, setBibError] = useState('');
+  const [bibSuccess, setBibSuccess] = useState('');
+  const [bibSaving, setBibSaving] = useState(false);
 
   useEffect(() => {
     if (!currentUser) {
@@ -75,6 +91,8 @@ export default function Settings() {
       setIsLoading(false);
       return;
     }
+    if (initialSettingsLoadStarted.current) return;
+    initialSettingsLoadStarted.current = true;
     loadUsers();
     loadRounds();
   }, [assignmentAccessError, assignmentAccessLoading, currentUser?.role, hasAssignmentAccess, isAdministrator, navigate]);
@@ -103,10 +121,12 @@ export default function Settings() {
 
   const loadRounds = async () => {
     try {
-    const [roundSnapshot, competitionSnapshot, assessmentSnapshot] = await Promise.all([
+    const [roundSnapshot, competitionSnapshot, assessmentSnapshot, bibSnapshot, studentsSnapshot] = await Promise.all([
       get(ref(database, 'settings/rounds')),
       get(ref(database, 'settings/competition')),
       get(ref(database, 'settings/assessment/resultFields')),
+      get(ref(database, 'settings/bib')),
+      get(ref(database, 'students')),
     ]);
     const loadedRounds = roundSnapshot.exists() ? normalizeRounds(roundSnapshot.val()) : DEFAULT_ROUNDS;
     const competition = { ...DEFAULT_COMPETITION_SETTINGS, ...(competitionSnapshot.val() || {}) };
@@ -119,6 +139,10 @@ export default function Settings() {
         ? normalizeAssessmentResultFields(assessmentSnapshot.val())
         : DEFAULT_ASSESSMENT_RESULT_FIELDS,
     );
+    setBibSettings(normalizeBibSettings(bibSnapshot.val()));
+    setRegisteredStudents(studentsSnapshot.exists()
+      ? Object.entries(studentsSnapshot.val() as Record<string, Omit<BibStudent, 'key'>>).map(([key, student]) => ({ ...student, key }))
+      : []);
     } catch (error) { const d = describeError(error, 'Unable to load settings'); setDataError(`${d.message} — ${d.code}`); }
     finally { setIsLoading(false); }
   };
@@ -259,6 +283,89 @@ export default function Settings() {
     } catch (error) {
       const details = describeError(error, 'Assessment result display could not be saved');
       setAssessmentDisplayError(`${details.message} — ${details.code} — ${details.time}`);
+    }
+  };
+
+  const bibMigrationPreview = useMemo(
+    () => buildBibMigration(registeredStudents, bibSettings).filter((entry) => entry.oldId !== entry.newId),
+    [bibSettings, registeredStudents],
+  );
+
+  const handleSaveBibSettings = async () => {
+    setBibError('');
+    setBibSuccess('');
+    const validationErrors = validateBibSettings(bibSettings);
+    if (validationErrors.length) {
+      setBibError(validationErrors.join(' '));
+      return;
+    }
+
+    if (changeCurrentBibs && registeredStudents.length && !window.confirm(
+      `Regenerate current BIB numbers using these rules? The current preview shows ${bibMigrationPreview.length} change${bibMigrationPreview.length === 1 ? '' : 's'}. All printed BIB cards and QR codes should be replaced after regeneration. Student scores and coach assessments will be updated automatically.`,
+    )) return;
+
+    setBibSaving(true);
+    try {
+      if (!changeCurrentBibs) {
+        await set(ref(database, 'settings/bib'), bibSettings);
+        setBibSuccess('BIB rules saved. Existing students keep their current BIB numbers.');
+        return;
+      }
+
+      const [studentsSnapshot, scoresSnapshot, assessmentsSnapshot] = await Promise.all([
+        get(ref(database, 'students')),
+        get(ref(database, 'scores')),
+        get(ref(database, 'studentAssessments')),
+      ]);
+      const latestStudents: BibStudent[] = studentsSnapshot.exists()
+        ? Object.entries(studentsSnapshot.val() as Record<string, Omit<BibStudent, 'key'>>).map(([key, student]) => ({ ...student, key }))
+        : [];
+      const duplicateOldIds = latestStudents
+        .map((student) => student.id.toUpperCase())
+        .filter((id, index, ids) => ids.indexOf(id) !== index);
+      if (duplicateOldIds.length) {
+        throw new Error(`Existing duplicate BIB detected: ${Array.from(new Set(duplicateOldIds)).join(', ')}. Resolve duplicate records before regenerating BIBs.`);
+      }
+
+      const migration = buildBibMigration(latestStudents, bibSettings);
+      const generatedIds = migration.map((entry) => entry.newId.toUpperCase());
+      if (new Set(generatedIds).size !== generatedIds.length) {
+        throw new Error('The selected BIB rules would create duplicate BIB numbers. Change the prefixes or starting numbers.');
+      }
+
+      const changed = migration.filter((entry) => entry.oldId !== entry.newId);
+      const byStudentKey = new Map(changed.map((entry) => [entry.key, entry]));
+      const byOldId = new Map(changed.map((entry) => [entry.oldId.toUpperCase(), entry]));
+      const updates: Record<string, unknown> = { 'settings/bib': bibSettings };
+      changed.forEach((entry) => { updates[`students/${entry.key}/id`] = entry.newId; });
+
+      if (scoresSnapshot.exists()) {
+        Object.entries(scoresSnapshot.val() as Record<string, { id?: string; studentKey?: string }>).forEach(([key, score]) => {
+          const entry = (score.studentKey && byStudentKey.get(score.studentKey)) || (score.id && byOldId.get(score.id.toUpperCase()));
+          if (entry) updates[`scores/${key}/id`] = entry.newId;
+        });
+      }
+      if (assessmentsSnapshot.exists()) {
+        Object.entries(assessmentsSnapshot.val() as Record<string, { id?: string; studentKey?: string }>).forEach(([key, assessment]) => {
+          const entry = (assessment.studentKey && byStudentKey.get(assessment.studentKey)) || (assessment.id && byOldId.get(assessment.id.toUpperCase()));
+          if (entry) updates[`studentAssessments/${key}/id`] = entry.newId;
+        });
+      }
+
+      await update(ref(database), updates);
+      setRegisteredStudents(latestStudents.map((student) => {
+        const entry = student.key ? byStudentKey.get(student.key) : undefined;
+        return entry ? { ...student, id: entry.newId } : student;
+      }));
+      setChangeCurrentBibs(false);
+      setBibSuccess(changed.length
+        ? `${changed.length} current BIB number${changed.length === 1 ? '' : 's'} changed successfully. Reprint all distributed BIB cards and QR codes.`
+        : 'BIB rules saved. Current BIB numbers already match these rules.');
+    } catch (error) {
+      const details = describeError(error, 'BIB settings could not be saved');
+      setBibError(`${details.message} — ${details.code} — ${details.time}`);
+    } finally {
+      setBibSaving(false);
     }
   };
 
@@ -673,6 +780,106 @@ export default function Settings() {
               <Save className="h-5 w-5" /> Save Round & Boulder Settings
             </button>
           </div>
+
+          <section id="bib-settings" className="order-2 border-b border-slate-200 pb-6 mb-6">
+            <div className="mb-2 flex items-center gap-2">
+              <Hash className="h-5 w-5 text-violet-700" />
+              <h3 className="text-xl font-bold text-slate-900">BIB Number Settings</h3>
+            </div>
+            <p className="mb-4 text-sm text-slate-600">
+              Control how new student BIB numbers are created. Existing students keep their current BIB unless you enable the regeneration option below.
+            </p>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <label htmlFor="bib-event-prefix" className="mb-2 block text-sm font-semibold text-slate-700">Optional event prefix</label>
+                <input
+                  id="bib-event-prefix"
+                  value={bibSettings.eventPrefix}
+                  onChange={(event) => setBibSettings((current) => ({
+                    ...current,
+                    eventPrefix: event.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 10),
+                  }))}
+                  maxLength={10}
+                  placeholder="Example: KCC-"
+                  className="w-full rounded-lg border border-slate-300 px-4 py-3 font-mono uppercase focus:ring-2 focus:ring-violet-500"
+                />
+                <p className="mt-1 text-xs text-slate-500">Optional text placed before both gender prefixes. Include a hyphen if wanted.</p>
+              </div>
+
+              <div>
+                <label htmlFor="bib-female-prefix" className="mb-2 block text-sm font-semibold text-slate-700">Female prefix</label>
+                <input
+                  id="bib-female-prefix"
+                  value={bibSettings.femalePrefix}
+                  onChange={(event) => setBibSettings((current) => ({
+                    ...current,
+                    femalePrefix: event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4),
+                  }))}
+                  maxLength={4}
+                  className="w-full rounded-lg border border-slate-300 px-4 py-3 font-mono uppercase focus:ring-2 focus:ring-pink-500"
+                />
+              </div>
+              <div>
+                <label htmlFor="bib-male-prefix" className="mb-2 block text-sm font-semibold text-slate-700">Male prefix</label>
+                <input
+                  id="bib-male-prefix"
+                  value={bibSettings.malePrefix}
+                  onChange={(event) => setBibSettings((current) => ({
+                    ...current,
+                    malePrefix: event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4),
+                  }))}
+                  maxLength={4}
+                  className="w-full rounded-lg border border-slate-300 px-4 py-3 font-mono uppercase focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label htmlFor="bib-female-start" className="mb-2 block text-sm font-semibold text-slate-700">Female starting number</label>
+                <input id="bib-female-start" type="number" min="1" max="999999" value={bibSettings.femaleStart} onChange={(event) => setBibSettings((current) => ({ ...current, femaleStart: Math.max(1, Number(event.target.value) || 1) }))} className="w-full rounded-lg border border-slate-300 px-4 py-3 focus:ring-2 focus:ring-pink-500" />
+              </div>
+              <div>
+                <label htmlFor="bib-male-start" className="mb-2 block text-sm font-semibold text-slate-700">Male starting number</label>
+                <input id="bib-male-start" type="number" min="1" max="999999" value={bibSettings.maleStart} onChange={(event) => setBibSettings((current) => ({ ...current, maleStart: Math.max(1, Number(event.target.value) || 1) }))} className="w-full rounded-lg border border-slate-300 px-4 py-3 focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div className="sm:col-span-2">
+                <label htmlFor="bib-number-length" className="mb-2 block text-sm font-semibold text-slate-700">Minimum number length</label>
+                <select id="bib-number-length" value={bibSettings.numberLength} onChange={(event) => setBibSettings((current) => ({ ...current, numberLength: Number(event.target.value) }))} className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 focus:ring-2 focus:ring-violet-500">
+                  {[1, 2, 3, 4, 5, 6].map((length) => <option key={length} value={length}>{length} digit{length === 1 ? '' : 's'} ({String(1).padStart(length, '0')})</option>)}
+                </select>
+              </div>
+            </div>
+
+            <fieldset className="mt-5 rounded-xl border border-slate-200 p-4">
+              <legend className="px-2 font-bold text-slate-800">Number allocation rule</legend>
+              <label className="flex min-h-11 items-start gap-3 py-2"><input type="radio" name="bib-allocation" checked={bibSettings.allocationMode === 'first-available'} onChange={() => setBibSettings((current) => ({ ...current, allocationMode: 'first-available' }))} className="mt-1 h-5 w-5" /><span><strong>Use first available number (recommended)</strong><span className="block text-sm text-slate-600">If F06 is missing between F01–F10, the next female student receives F06.</span></span></label>
+              <label className="flex min-h-11 items-start gap-3 py-2"><input type="radio" name="bib-allocation" checked={bibSettings.allocationMode === 'next-highest'} onChange={() => setBibSettings((current) => ({ ...current, allocationMode: 'next-highest' }))} className="mt-1 h-5 w-5" /><span><strong>Always use the next highest number</strong><span className="block text-sm text-slate-600">If F01–F05 and F07–F10 exist, the next female student receives F11.</span></span></label>
+            </fieldset>
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-pink-200 bg-pink-50 p-4"><p className="text-sm font-semibold text-pink-700">Female BIB preview</p><p className="mt-1 break-all font-mono text-2xl font-bold text-pink-900">{formatBib('female', bibSettings.femaleStart, bibSettings)}</p></div>
+              <div className="rounded-xl border border-blue-200 bg-blue-50 p-4"><p className="text-sm font-semibold text-blue-700">Male BIB preview</p><p className="mt-1 break-all font-mono text-2xl font-bold text-blue-900">{formatBib('male', bibSettings.maleStart, bibSettings)}</p></div>
+            </div>
+
+            <label className="mt-5 flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4">
+              <input type="checkbox" checked={changeCurrentBibs} onChange={(event) => setChangeCurrentBibs(event.target.checked)} className="mt-1 h-5 w-5 shrink-0" />
+              <span><strong className="block text-amber-900">Regenerate all current student BIB numbers when saving</strong><span className="mt-1 block text-sm text-amber-800">Leave this off to apply the rules only to new registrations and future gender changes.</span></span>
+            </label>
+
+            {changeCurrentBibs && <div className="mt-3 rounded-xl border-2 border-red-300 bg-red-50 p-4 text-red-900">
+              <div className="flex items-start gap-3"><AlertTriangle className="mt-0.5 h-6 w-6 shrink-0" /><div><p className="font-bold">Printed BIB warning</p><p className="mt-1 text-sm">After regeneration, all previously printed BIB cards and QR codes should be replaced. Scores and coach assessments will follow the new BIB numbers automatically.</p></div></div>
+              <p className="mt-3 text-sm font-semibold">{bibMigrationPreview.length} of {registeredStudents.length} current BIB numbers will change.</p>
+              {bibMigrationPreview.length > 0 && <div className="mt-3 max-h-44 overflow-y-auto rounded-lg border border-red-200 bg-white p-3 text-sm">
+                {bibMigrationPreview.slice(0, 12).map((entry) => <div key={entry.key} className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 py-1 last:border-0"><span className="truncate">{entry.name}</span><span className="font-mono font-semibold">{entry.oldId} → {entry.newId}</span></div>)}
+                {bibMigrationPreview.length > 12 && <p className="pt-2 text-xs text-slate-500">And {bibMigrationPreview.length - 12} more…</p>}
+              </div>}
+            </div>}
+
+            {bibError && <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{bibError}</div>}
+            {bibSuccess && <div className="mt-4 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700">{bibSuccess}</div>}
+            <button type="button" disabled={bibSaving} onClick={() => void handleSaveBibSettings()} className={`mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-lg px-6 py-3 font-semibold text-white shadow-md disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto ${changeCurrentBibs ? 'bg-red-700 hover:bg-red-800' : 'bg-violet-600 hover:bg-violet-700'}`}>
+              <Save className="h-5 w-5" /> {bibSaving ? 'Saving…' : changeCurrentBibs ? 'Save Rules & Regenerate Current BIBs' : 'Save BIB Rules'}
+            </button>
+          </section>
 
           {assignmentSection}
 

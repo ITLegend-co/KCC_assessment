@@ -21,13 +21,8 @@ export const ASSESSMENT_ELEMENTS = [
   },
   {
     id: 'powerSequencing',
-    label: 'Power & Sequencing',
-    observe: 'Applying strength at the correct time and in the correct order.',
-  },
-  {
-    id: 'foundationLimit',
-    label: 'Foundation Limit',
-    observe: 'Performance and technique near the upper foundation grade range.',
+    label: 'Coordination Movement',
+    observe: 'Coordinating hands, feet and body timing through complex movement.',
   },
   {
     id: 'technicalTransition',
@@ -45,19 +40,9 @@ export const ASSESSMENT_ELEMENTS = [
     observe: 'Composure, time management and decision-making during attempts.',
   },
   {
-    id: 'advancedProblemSolving',
-    label: 'Advanced Problem Solving',
-    observe: 'Finding and adapting solutions for unfamiliar complex movement.',
-  },
-  {
     id: 'precisionPower',
     label: 'Precision & Power',
     observe: 'Accurate contact and body control while applying force.',
-  },
-  {
-    id: 'advancedLimit',
-    label: 'Advanced Limit',
-    observe: 'Overall performance, adaptability and control at maximum difficulty.',
   },
 ] as const;
 
