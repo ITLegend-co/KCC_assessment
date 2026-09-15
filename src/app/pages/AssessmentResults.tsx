@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router';
-import { GraduationCap, Search } from 'lucide-react';
+import { Link, useNavigate } from 'react-router';
+import { ArrowLeft, GraduationCap, Search } from 'lucide-react';
 import { AnimatePresence } from 'motion/react';
 import { onValue, ref } from 'firebase/database';
 import { database } from '../lib/firebase';
@@ -9,7 +9,6 @@ import { BackButton } from '../components/BackButton';
 import { StudentInfoModal } from '../components/StudentInfoModal';
 import { ErrorMessage, LoadingMessage } from '../components/StatusMessage';
 import { useRounds } from '../hooks/useRounds';
-import { getBoulderRange, useCompetitionSettings } from '../lib/competition';
 import { useAssessmentResultFields, useStudentAssessments } from '../hooks/useStudentAssessments';
 import {
   ASSESSMENT_GRADE_BANDS,
@@ -20,10 +19,8 @@ import {
 
 export default function AssessmentResults() {
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
   const [currentUser] = useState(() => getCurrentUser());
   const rounds = useRounds();
-  const { settings: competitionSettings, loading: competitionLoading, error: competitionError } = useCompetitionSettings();
   const { assessments, loading: assessmentsLoading, error: assessmentsError } = useStudentAssessments();
   const { fields, loading: fieldsLoading, error: fieldsError } = useAssessmentResultFields();
   const [students, setStudents] = useState<AssessmentStudent[]>([]);
@@ -31,22 +28,6 @@ export default function AssessmentResults() {
   const [studentError, setStudentError] = useState('');
   const [search, setSearch] = useState('');
   const [selectedStudent, setSelectedStudent] = useState<AssessmentStudent | null>(null);
-
-  const queryRound = searchParams.get('round') || '';
-  const [selectedRound, setSelectedRound] = useState(queryRound);
-
-  useEffect(() => {
-    if (!currentUser) navigate('/login');
-  }, [currentUser, navigate]);
-
-  useEffect(() => {
-    if (!rounds.length) return;
-    if (!rounds.includes(selectedRound)) {
-      const nextRound = rounds[0];
-      setSelectedRound(nextRound);
-      setSearchParams({ round: nextRound }, { replace: true });
-    }
-  }, [rounds, selectedRound, setSearchParams]);
 
   useEffect(() => onValue(ref(database, 'students'), (snapshot) => {
     const data = snapshot.val() || {};
@@ -61,11 +42,10 @@ export default function AssessmentResults() {
     setStudentError(`${error.message} (${error.code || 'STUDENT_READ_FAILED'})`);
   }), []);
 
-  const selectedBoulderRange = getBoulderRange(rounds, selectedRound, competitionSettings);
   const results = useMemo(() => students.map((student) => ({
     student,
-    summary: summarizeStudentAssessment(assessments, student.id, selectedRound, selectedBoulderRange),
-  })), [assessments, selectedBoulderRange.end, selectedBoulderRange.start, selectedRound, students]);
+    summary: summarizeStudentAssessment(assessments, student.id, rounds),
+  })), [assessments, rounds, students]);
 
   const filteredResults = results.filter(({ student }) => {
     const query = search.trim().toLowerCase();
@@ -76,19 +56,17 @@ export default function AssessmentResults() {
 
   const openDetail = (student: AssessmentStudent) => {
     if (!student.key) return;
-    navigate(`/assessment-results/${student.key}?round=${encodeURIComponent(selectedRound)}`);
+    navigate(`/assessment-results/${student.key}`);
   };
 
-  if (!currentUser) return null;
-
-  const loading = studentsLoading || assessmentsLoading || fieldsLoading || competitionLoading;
-  const error = studentError || assessmentsError || fieldsError || competitionError;
+  const loading = studentsLoading || assessmentsLoading || fieldsLoading;
+  const error = studentError || assessmentsError || fieldsError;
   const visibleColumnCount = 2 + Object.values(fields).filter(Boolean).length;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 p-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-4 md:p-6">
       <div className="mx-auto max-w-6xl">
-        <div className="mb-6"><BackButton /></div>
+        <div className="mb-6">{currentUser ? <BackButton /> : <Link to="/ranking-only" className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-white px-4 text-slate-700 shadow-sm hover:bg-slate-50 hover:text-slate-900"><ArrowLeft className="h-4 w-4" /> Back to Ranking</Link>}</div>
         <main className="overflow-hidden rounded-xl bg-white shadow-lg">
           <div className="border-b border-slate-200 p-4 sm:p-6">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -96,23 +74,17 @@ export default function AssessmentResults() {
                 <GraduationCap className="h-8 w-8 text-cyan-700" />
                 <div>
                   <h1 className="text-2xl font-bold text-slate-900 md:text-3xl">Student Assessment Results</h1>
-                  <p className="text-sm text-slate-600">Overall technical evaluation grades for every registered student.</p>
+                  <p className="text-sm text-slate-600">One overall technical evaluation compiled from every assessed boulder.</p>
                 </div>
               </div>
-              {(currentUser.role === 'administrator' || currentUser.role === 'coach') && <Link to="/student-assessment" className="flex min-h-11 items-center justify-center rounded-lg bg-cyan-600 px-4 font-semibold text-white hover:bg-cyan-700">Enter Student Assessment</Link>}
+              {(currentUser?.role === 'administrator' || currentUser?.role === 'coach') && <Link to="/student-assessment" className="flex min-h-11 items-center justify-center rounded-lg bg-cyan-600 px-4 font-semibold text-white hover:bg-cyan-700">Enter Student Assessment</Link>}
             </div>
 
-            <div className="mt-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+            <div className="mt-5">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
                 <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search BIB, name, school, or class…" className="min-h-11 w-full rounded-lg border border-slate-300 pl-10 pr-4 focus:ring-2 focus:ring-cyan-500" />
               </div>
-              <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                Round
-                <select value={selectedRound} onChange={(event) => { setSelectedRound(event.target.value); setSearchParams({ round: event.target.value }, { replace: true }); }} className="min-h-11 rounded-lg border border-slate-300 bg-white px-3">
-                  {rounds.map((roundName) => <option key={roundName} value={roundName}>{roundName}</option>)}
-                </select>
-              </label>
             </div>
           </div>
 

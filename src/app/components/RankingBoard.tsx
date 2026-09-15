@@ -414,7 +414,7 @@ export function RankingBoard({ showCopyLink = false, showAssessmentResults = fal
             <h2 className="text-2xl md:text-3xl font-bold text-slate-900">Student Ranking</h2>
 
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-              {showAssessmentResults && <button type="button" onClick={() => navigate(`/assessment-results?round=${encodeURIComponent(selectedRound)}`)} className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-cyan-600 px-4 font-semibold text-white shadow-md hover:bg-cyan-700">
+              {showAssessmentResults && <button type="button" onClick={() => navigate('/assessment-results')} className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-cyan-600 px-4 font-semibold text-white shadow-md hover:bg-cyan-700">
                 <GraduationCap className="h-5 w-5" /> Student Assessment Result
               </button>}
               <label className="text-sm font-semibold text-slate-700">Round:</label>
@@ -559,7 +559,7 @@ export function RankingBoard({ showCopyLink = false, showAssessmentResults = fal
           student={selectedStudentInfo}
           onClose={() => setSelectedStudentInfo(null)}
           onViewAssessment={showAssessmentResults && selectedStudentInfo.key
-            ? () => navigate(`/assessment-results/${selectedStudentInfo.key}?round=${encodeURIComponent(selectedRound)}`)
+            ? () => navigate(`/assessment-results/${selectedStudentInfo.key}`)
             : undefined}
         />}
       </AnimatePresence>

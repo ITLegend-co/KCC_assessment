@@ -91,13 +91,20 @@ export interface StudentAssessmentRecord {
 export interface ElementAssessmentSummary {
   elementId: AssessmentElementId;
   label: string;
-  scores: Record<number, AssessmentRating>;
+  scores: Record<string, AssessmentRating>;
   average: number | null;
   grade: AssessmentGrade;
 }
 
+export interface AssessmentBoulderSummary {
+  key: string;
+  round: string;
+  boulder: number;
+}
+
 export interface StudentAssessmentSummary {
   elements: ElementAssessmentSummary[];
+  boulders: AssessmentBoulderSummary[];
   overallAverage: number | null;
   overallGrade: AssessmentGrade;
   assessedBoulders: number;
@@ -177,25 +184,37 @@ export function getLatestStudentAssessments(records: StudentAssessmentRecord[]) 
   return Array.from(latest.values());
 }
 
+export function getAssessmentBoulderKey(round: string, boulder: number) {
+  return `${round}\u0000${boulder}`;
+}
+
 export function summarizeStudentAssessment(
   records: StudentAssessmentRecord[],
   studentId: string,
-  round: string,
-  boulderRange?: { start: number; end: number },
+  roundOrder: string[] = [],
 ): StudentAssessmentSummary {
-  const latest = getLatestStudentAssessments(records).filter(
-    (record) => record.id === studentId &&
-      record.round === round &&
-      (!boulderRange || (record.boulder >= boulderRange.start && record.boulder <= boulderRange.end)),
-  );
+  const roundPosition = new Map(roundOrder.map((roundName, index) => [roundName, index]));
+  const latest = getLatestStudentAssessments(records)
+    .filter((record) => record.id === studentId)
+    .sort((a, b) => {
+      const aRound = roundPosition.get(a.round) ?? Number.MAX_SAFE_INTEGER;
+      const bRound = roundPosition.get(b.round) ?? Number.MAX_SAFE_INTEGER;
+      return aRound - bRound || a.boulder - b.boulder || a.round.localeCompare(b.round);
+    });
+
+  const boulders = latest.map((record) => ({
+    key: getAssessmentBoulderKey(record.round, record.boulder),
+    round: record.round,
+    boulder: record.boulder,
+  }));
 
   const elements = ASSESSMENT_ELEMENTS.map((element) => {
-    const scores: Record<number, AssessmentRating> = {};
+    const scores: Record<string, AssessmentRating> = {};
     const observed: number[] = [];
 
     latest.forEach((record) => {
       const rating = record.ratings?.[element.id];
-      scores[record.boulder] = typeof rating === 'number' ? rating : null;
+      scores[getAssessmentBoulderKey(record.round, record.boulder)] = typeof rating === 'number' ? rating : null;
       if (typeof rating === 'number' && rating >= 1 && rating <= 5) observed.push(rating);
     });
 
@@ -226,9 +245,10 @@ export function summarizeStudentAssessment(
 
   return {
     elements,
+    boulders,
     overallAverage,
     overallGrade: gradeAssessmentAverage(overallAverage),
-    assessedBoulders: new Set(latest.map((record) => record.boulder)).size,
+    assessedBoulders: latest.length,
   };
 }
 

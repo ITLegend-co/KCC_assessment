@@ -10,7 +10,7 @@ export default function RankingOnly() {
           </h1>
           <p className="text-sm sm:text-base text-slate-600">Live Results - Auto-refreshing</p>
         </div>
-        <RankingBoard showCopyLink={false} />
+        <RankingBoard showCopyLink={false} showAssessmentResults={true} />
       </div>
     </div>
   );
