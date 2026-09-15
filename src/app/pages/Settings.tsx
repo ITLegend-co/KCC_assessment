@@ -833,14 +833,33 @@ export default function Settings() {
                   className="w-full rounded-lg border border-slate-300 px-4 py-3 font-mono uppercase focus:ring-2 focus:ring-blue-500"
                 />
               </div>
-              <div>
-                <label htmlFor="bib-female-start" className="mb-2 block text-sm font-semibold text-slate-700">Female starting number</label>
-                <input id="bib-female-start" type="number" min="1" max="999999" value={bibSettings.femaleStart} onChange={(event) => setBibSettings((current) => ({ ...current, femaleStart: Math.max(1, Number(event.target.value) || 1) }))} className="w-full rounded-lg border border-slate-300 px-4 py-3 focus:ring-2 focus:ring-pink-500" />
-              </div>
-              <div>
-                <label htmlFor="bib-male-start" className="mb-2 block text-sm font-semibold text-slate-700">Male starting number</label>
-                <input id="bib-male-start" type="number" min="1" max="999999" value={bibSettings.maleStart} onChange={(event) => setBibSettings((current) => ({ ...current, maleStart: Math.max(1, Number(event.target.value) || 1) }))} className="w-full rounded-lg border border-slate-300 px-4 py-3 focus:ring-2 focus:ring-blue-500" />
-              </div>
+
+              <fieldset className="sm:col-span-2 rounded-xl border border-slate-200 p-4">
+                <legend className="px-2 font-bold text-slate-800">Number sequence</legend>
+                <label className="flex min-h-11 items-start gap-3 py-2">
+                  <input type="radio" name="bib-sequence" checked={bibSettings.sequenceMode === 'separate'} onChange={() => setBibSettings((current) => ({ ...current, sequenceMode: 'separate' }))} className="mt-1 h-5 w-5" />
+                  <span><strong>Separate female and male numbers</strong><span className="block text-sm text-slate-600">Female and male students each have their own sequence, such as F01, F02 and M01, M02.</span></span>
+                </label>
+                <label className="flex min-h-11 items-start gap-3 py-2">
+                  <input type="radio" name="bib-sequence" checked={bibSettings.sequenceMode === 'combined'} onChange={() => setBibSettings((current) => ({ ...current, sequenceMode: 'combined' }))} className="mt-1 h-5 w-5" />
+                  <span><strong>One combined registration sequence</strong><span className="block text-sm text-slate-600">The number follows registration order across all students, such as F01, M02, F03.</span></span>
+                </label>
+              </fieldset>
+
+              {bibSettings.sequenceMode === 'separate' ? <>
+                <div>
+                  <label htmlFor="bib-female-start" className="mb-2 block text-sm font-semibold text-slate-700">Female starting number</label>
+                  <input id="bib-female-start" type="number" min="1" max="999999" value={bibSettings.femaleStart} onChange={(event) => setBibSettings((current) => ({ ...current, femaleStart: Math.max(1, Number(event.target.value) || 1) }))} className="w-full rounded-lg border border-slate-300 px-4 py-3 focus:ring-2 focus:ring-pink-500" />
+                </div>
+                <div>
+                  <label htmlFor="bib-male-start" className="mb-2 block text-sm font-semibold text-slate-700">Male starting number</label>
+                  <input id="bib-male-start" type="number" min="1" max="999999" value={bibSettings.maleStart} onChange={(event) => setBibSettings((current) => ({ ...current, maleStart: Math.max(1, Number(event.target.value) || 1) }))} className="w-full rounded-lg border border-slate-300 px-4 py-3 focus:ring-2 focus:ring-blue-500" />
+                </div>
+              </> : <div className="sm:col-span-2">
+                <label htmlFor="bib-combined-start" className="mb-2 block text-sm font-semibold text-slate-700">Combined starting number</label>
+                <input id="bib-combined-start" type="number" min="1" max="999999" value={bibSettings.combinedStart} onChange={(event) => setBibSettings((current) => ({ ...current, combinedStart: Math.max(1, Number(event.target.value) || 1) }))} className="w-full rounded-lg border border-slate-300 px-4 py-3 focus:ring-2 focus:ring-violet-500" />
+                <p className="mt-1 text-xs text-slate-500">This starting number is shared by female and male registrations.</p>
+              </div>}
               <div className="sm:col-span-2">
                 <label htmlFor="bib-number-length" className="mb-2 block text-sm font-semibold text-slate-700">Minimum number length</label>
                 <select id="bib-number-length" value={bibSettings.numberLength} onChange={(event) => setBibSettings((current) => ({ ...current, numberLength: Number(event.target.value) }))} className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 focus:ring-2 focus:ring-violet-500">
@@ -851,14 +870,16 @@ export default function Settings() {
 
             <fieldset className="mt-5 rounded-xl border border-slate-200 p-4">
               <legend className="px-2 font-bold text-slate-800">Number allocation rule</legend>
-              <label className="flex min-h-11 items-start gap-3 py-2"><input type="radio" name="bib-allocation" checked={bibSettings.allocationMode === 'first-available'} onChange={() => setBibSettings((current) => ({ ...current, allocationMode: 'first-available' }))} className="mt-1 h-5 w-5" /><span><strong>Use first available number (recommended)</strong><span className="block text-sm text-slate-600">If F06 is missing between F01–F10, the next female student receives F06.</span></span></label>
-              <label className="flex min-h-11 items-start gap-3 py-2"><input type="radio" name="bib-allocation" checked={bibSettings.allocationMode === 'next-highest'} onChange={() => setBibSettings((current) => ({ ...current, allocationMode: 'next-highest' }))} className="mt-1 h-5 w-5" /><span><strong>Always use the next highest number</strong><span className="block text-sm text-slate-600">If F01–F05 and F07–F10 exist, the next female student receives F11.</span></span></label>
+              <label className="flex min-h-11 items-start gap-3 py-2"><input type="radio" name="bib-allocation" checked={bibSettings.allocationMode === 'first-available'} onChange={() => setBibSettings((current) => ({ ...current, allocationMode: 'first-available' }))} className="mt-1 h-5 w-5" /><span><strong>Use first available number (recommended)</strong><span className="block text-sm text-slate-600">{bibSettings.sequenceMode === 'combined' ? 'If number 06 is unused across all students, the next registrant receives 06 with their gender prefix.' : 'If F06 is missing between F01–F10, the next female student receives F06.'}</span></span></label>
+              <label className="flex min-h-11 items-start gap-3 py-2"><input type="radio" name="bib-allocation" checked={bibSettings.allocationMode === 'next-highest'} onChange={() => setBibSettings((current) => ({ ...current, allocationMode: 'next-highest' }))} className="mt-1 h-5 w-5" /><span><strong>Always use the next highest number</strong><span className="block text-sm text-slate-600">{bibSettings.sequenceMode === 'combined' ? 'If the highest shared number is 10, the next registrant receives 11 with their gender prefix.' : 'If F01–F05 and F07–F10 exist, the next female student receives F11.'}</span></span></label>
             </fieldset>
 
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-xl border border-pink-200 bg-pink-50 p-4"><p className="text-sm font-semibold text-pink-700">Female BIB preview</p><p className="mt-1 break-all font-mono text-2xl font-bold text-pink-900">{formatBib('female', bibSettings.femaleStart, bibSettings)}</p></div>
-              <div className="rounded-xl border border-blue-200 bg-blue-50 p-4"><p className="text-sm font-semibold text-blue-700">Male BIB preview</p><p className="mt-1 break-all font-mono text-2xl font-bold text-blue-900">{formatBib('male', bibSettings.maleStart, bibSettings)}</p></div>
+              <div className="rounded-xl border border-pink-200 bg-pink-50 p-4"><p className="text-sm font-semibold text-pink-700">{bibSettings.sequenceMode === 'combined' ? 'Registration #1 (female)' : 'Female BIB preview'}</p><p className="mt-1 break-all font-mono text-2xl font-bold text-pink-900">{formatBib('female', bibSettings.sequenceMode === 'combined' ? bibSettings.combinedStart : bibSettings.femaleStart, bibSettings)}</p></div>
+              <div className="rounded-xl border border-blue-200 bg-blue-50 p-4"><p className="text-sm font-semibold text-blue-700">{bibSettings.sequenceMode === 'combined' ? 'Registration #2 (male)' : 'Male BIB preview'}</p><p className="mt-1 break-all font-mono text-2xl font-bold text-blue-900">{formatBib('male', bibSettings.sequenceMode === 'combined' ? bibSettings.combinedStart + 1 : bibSettings.maleStart, bibSettings)}</p></div>
             </div>
+
+            {bibSettings.sequenceMode === 'combined' && <p className="mt-3 rounded-lg bg-violet-50 p-3 text-sm text-violet-800">When current BIBs are regenerated, existing students are numbered in their saved registration order, regardless of gender.</p>}
 
             <label className="mt-5 flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4">
               <input type="checkbox" checked={changeCurrentBibs} onChange={(event) => setChangeCurrentBibs(event.target.checked)} className="mt-1 h-5 w-5 shrink-0" />

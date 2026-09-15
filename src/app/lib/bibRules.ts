@@ -1,13 +1,16 @@
 export type BibGender = 'male' | 'female';
 export type BibAllocationMode = 'first-available' | 'next-highest';
+export type BibSequenceMode = 'separate' | 'combined';
 
 export interface BibSettings {
   malePrefix: string;
   femalePrefix: string;
   maleStart: number;
   femaleStart: number;
+  combinedStart: number;
   numberLength: number;
   allocationMode: BibAllocationMode;
+  sequenceMode: BibSequenceMode;
   eventPrefix: string;
 }
 
@@ -16,6 +19,7 @@ export interface BibStudent {
   gender: BibGender;
   name?: string;
   key?: string;
+  createdAt?: number | string;
 }
 
 export interface BibMigrationEntry {
@@ -31,8 +35,10 @@ export const DEFAULT_BIB_SETTINGS: BibSettings = {
   femalePrefix: 'F',
   maleStart: 1,
   femaleStart: 1,
+  combinedStart: 1,
   numberLength: 2,
   allocationMode: 'first-available',
+  sequenceMode: 'separate',
   eventPrefix: '',
 };
 
@@ -64,8 +70,10 @@ export function normalizeBibSettings(value: unknown): BibSettings {
     femalePrefix: cleanGenderPrefix(source.femalePrefix, DEFAULT_BIB_SETTINGS.femalePrefix),
     maleStart: cleanStart(source.maleStart, DEFAULT_BIB_SETTINGS.maleStart),
     femaleStart: cleanStart(source.femaleStart, DEFAULT_BIB_SETTINGS.femaleStart),
+    combinedStart: cleanStart(source.combinedStart, DEFAULT_BIB_SETTINGS.combinedStart),
     numberLength: cleanNumberLength(source.numberLength),
     allocationMode: source.allocationMode === 'next-highest' ? 'next-highest' : 'first-available',
+    sequenceMode: source.sequenceMode === 'combined' ? 'combined' : 'separate',
     eventPrefix: cleanEventPrefix(source.eventPrefix),
   };
 }
@@ -90,6 +98,9 @@ export function validateBibSettings(settings: BibSettings) {
   if (!Number.isInteger(settings.femaleStart) || settings.femaleStart < 1) {
     errors.push('Female starting number must be 1 or higher.');
   }
+  if (!Number.isInteger(settings.combinedStart) || settings.combinedStart < 1) {
+    errors.push('Combined starting number must be 1 or higher.');
+  }
   if (!Number.isInteger(settings.numberLength) || settings.numberLength < 1 || settings.numberLength > 6) {
     errors.push('Number length must be between 1 and 6 digits.');
   }
@@ -101,6 +112,7 @@ export function getBibPrefix(gender: BibGender, settings: BibSettings) {
 }
 
 export function getBibStart(gender: BibGender, settings: BibSettings) {
+  if (settings.sequenceMode === 'combined') return settings.combinedStart;
   return gender === 'male' ? settings.maleStart : settings.femaleStart;
 }
 
@@ -125,13 +137,33 @@ export function generateAvailableBib(
 ) {
   const eligibleStudents = students.filter((student) => student.key !== excludedKey);
   const occupiedIds = new Set(eligibleStudents.map((student) => student.id.toUpperCase()));
+  const usesCombinedSequence = settings.sequenceMode === 'combined';
   const usedNumbers = new Set(
     eligibleStudents
-      .filter((student) => student.gender === gender)
-      .map((student) => extractBibNumber(student.id, gender, settings))
+      .filter((student) => usesCombinedSequence || student.gender === gender)
+      .map((student) => (
+        extractBibNumber(student.id, student.gender, settings) ??
+        (usesCombinedSequence ? trailingNumber(student.id) : null)
+      ))
       .filter((number): number is number => number !== null),
   );
   const start = getBibStart(gender, settings);
+
+  if (usesCombinedSequence && excludedKey) {
+    const existing = students.find((student) => student.key === excludedKey);
+    const currentNumber = existing
+      ? extractBibNumber(existing.id, existing.gender, settings) ?? trailingNumber(existing.id)
+      : null;
+    if (
+      currentNumber !== null &&
+      currentNumber >= start &&
+      !usedNumbers.has(currentNumber) &&
+      !occupiedIds.has(formatBib(gender, currentNumber, settings).toUpperCase())
+    ) {
+      return formatBib(gender, currentNumber, settings);
+    }
+  }
+
   let number = settings.allocationMode === 'next-highest' && usedNumbers.size
     ? Math.max(start - 1, ...usedNumbers) + 1
     : start;
@@ -144,17 +176,58 @@ export function generateAvailableBib(
 
 function trailingNumber(id: string) {
   const match = id.match(/(\d+)$/);
-  return match ? Number(match[1]) : Number.MAX_SAFE_INTEGER;
+  return match ? Number(match[1]) : null;
+}
+
+function compareRegistrationOrder(a: BibStudent, b: BibStudent) {
+  const parseCreatedAt = (value: BibStudent['createdAt']) => {
+    if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+    if (typeof value !== 'string' || !value.trim()) return null;
+    const numeric = Number(value);
+    if (Number.isFinite(numeric)) return numeric;
+    const timestamp = Date.parse(value);
+    return Number.isFinite(timestamp) ? timestamp : null;
+  };
+  const aCreated = parseCreatedAt(a.createdAt);
+  const bCreated = parseCreatedAt(b.createdAt);
+  if (aCreated !== null && bCreated !== null && aCreated !== bCreated) {
+    return aCreated - bCreated;
+  }
+  if (aCreated === null && bCreated !== null) return -1;
+  if (aCreated !== null && bCreated === null) return 1;
+  return (
+    String(a.key).localeCompare(String(b.key)) ||
+    String(a.name || '').localeCompare(String(b.name || '')) ||
+    a.id.localeCompare(b.id, undefined, { numeric: true })
+  );
 }
 
 export function buildBibMigration(students: BibStudent[], settings: BibSettings): BibMigrationEntry[] {
   const result: BibMigrationEntry[] = [];
 
+  if (settings.sequenceMode === 'combined') {
+    const ordered = students
+      .filter((student) => student.key)
+      .sort(compareRegistrationOrder);
+    let number = settings.combinedStart;
+    ordered.forEach((student) => {
+      result.push({
+        key: student.key as string,
+        name: student.name || student.id,
+        gender: student.gender,
+        oldId: student.id,
+        newId: formatBib(student.gender, number, settings),
+      });
+      number += 1;
+    });
+    return result;
+  }
+
   (['female', 'male'] as BibGender[]).forEach((gender) => {
     const ordered = students
       .filter((student) => student.gender === gender && student.key)
       .sort((a, b) => (
-        trailingNumber(a.id) - trailingNumber(b.id) ||
+        (trailingNumber(a.id) ?? Number.MAX_SAFE_INTEGER) - (trailingNumber(b.id) ?? Number.MAX_SAFE_INTEGER) ||
         a.id.localeCompare(b.id, undefined, { numeric: true }) ||
         String(a.name || '').localeCompare(String(b.name || '')) ||
         String(a.key).localeCompare(String(b.key))

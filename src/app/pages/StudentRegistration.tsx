@@ -18,6 +18,7 @@ interface Student {
   age: number;
   gender: 'male' | 'female';
   key?: string;
+  createdAt?: number | string;
 }
 
 type SortField = 'id' | 'name' | 'class' | 'school' | 'age' | 'gender';
@@ -139,6 +140,7 @@ export default function StudentRegistration() {
         class: formData.class,
         age: formData.age,
         gender: formData.gender,
+        ...(existingStudent.createdAt !== undefined ? { createdAt: existingStudent.createdAt } : {}),
       };
       
       if (nextId !== existingStudent.id) {
@@ -173,6 +175,7 @@ export default function StudentRegistration() {
         class: formData.class,
         age: formData.age,
         gender: formData.gender,
+        createdAt: Date.now(),
       };
 
       const result = await runTransaction(studentsRef, (currentStudents) => {
