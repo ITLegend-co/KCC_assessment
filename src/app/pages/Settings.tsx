@@ -3,7 +3,7 @@ import { BackButton } from '../components/BackButton';
 import { getCurrentUser, type UserRole } from '../lib/auth';
 import { database } from '../lib/firebase';
 import { ref, get, set, update } from 'firebase/database';
-import { Settings as SettingsIcon, Key, UserPlus, Trash2, Save, ListChecks, Plus, ArrowUp, ArrowDown, GraduationCap, ClipboardCheck } from 'lucide-react';
+import { Settings as SettingsIcon, UserPlus, Trash2, Save, ListChecks, Plus, ArrowUp, ArrowDown, GraduationCap, ClipboardCheck } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { DEFAULT_ROUNDS, normalizeRounds } from '../lib/rounds';
 import { AssessmentArchives } from '../components/AssessmentArchives';
@@ -22,6 +22,7 @@ import {
   useBoulderAssignmentSettings,
   type BoulderAssignmentSettings,
 } from '../lib/boulderAssignments';
+import { AccountPasswordSection, AdminPasswordResetSection } from '../components/PasswordManagement';
 
 interface ManagedUser {
   username: string;
@@ -42,11 +43,6 @@ export default function Settings() {
   const hasAssignmentAccess = canManageBoulderAssignments(currentUser, savedBoulderAssignments);
 
   const [users, setUsers] = useState<ManagedUser[]>([]);
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [passwordError, setPasswordError] = useState('');
-  const [passwordSuccess, setPasswordSuccess] = useState('');
-
   const [newUsername, setNewUsername] = useState('');
   const [newUserPassword, setNewUserPassword] = useState('');
   const [newUserRole, setNewUserRole] = useState<'chief-judge' | 'judge' | 'registry' | 'coach'>('judge');
@@ -74,9 +70,9 @@ export default function Settings() {
       navigate('/login');
       return;
     }
-    if (assignmentAccessLoading || (assignmentAccessError && !isAdministrator)) return;
-    if (!hasAssignmentAccess) {
-      navigate('/');
+    if (assignmentAccessLoading) return;
+    if (!isAdministrator && !hasAssignmentAccess) {
+      setIsLoading(false);
       return;
     }
     loadUsers();
@@ -361,37 +357,6 @@ export default function Settings() {
     }
   };
 
-  const handleChangePassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setPasswordError('');
-    setPasswordSuccess('');
-
-    if (newPassword !== confirmPassword) {
-      setPasswordError('Passwords do not match');
-      return;
-    }
-
-    if (newPassword.length < 6) {
-      setPasswordError('Password must be at least 6 characters');
-      return;
-    }
-
-    try {
-      // Find current user's key in Firebase
-      const userKey = users.find((u) => u.username === currentUser?.username)?.key;
-
-      if (userKey) {
-        const userRef = ref(database, `users/${userKey}`);
-        await update(userRef, { password: newPassword });
-        setPasswordSuccess('Password changed successfully');
-        setNewPassword('');
-        setConfirmPassword('');
-      }
-    } catch (err) {
-      setPasswordError('Failed to change password');
-    }
-  };
-
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setUserError('');
@@ -421,9 +386,10 @@ export default function Settings() {
         password: newUserPassword,
         role: newUserRole,
         createdAt: new Date().toISOString(),
+        mustChangePassword: true,
       });
 
-      setUserSuccess(`User "${newUsername}" created successfully`);
+      setUserSuccess(`User "${newUsername}" created successfully. Ask them to change the temporary password after their first login.`);
       setNewUsername('');
       setNewUserPassword('');
       setNewUserRole('judge');
@@ -461,13 +427,6 @@ export default function Settings() {
 
   if (assignmentAccessLoading) {
     return <div className="min-h-screen bg-slate-100 p-4 md:p-6"><div className="mx-auto max-w-4xl"><LoadingMessage text="Checking settings access…" /></div></div>;
-  }
-
-  if (!hasAssignmentAccess) {
-    if (assignmentAccessError) {
-      return <div className="min-h-screen bg-slate-100 p-4 md:p-6"><div className="mx-auto max-w-4xl"><BackButton /><div className="mt-6"><ErrorMessage message={assignmentAccessError} /></div></div></div>;
-    }
-    return null;
   }
 
   const assignmentTargets = users.filter((user) => user.role === 'judge' || user.role === 'chief-judge' || user.role === 'coach');
@@ -592,10 +551,11 @@ export default function Settings() {
         <div className="mx-auto max-w-4xl">
           <div className="mb-6"><BackButton /></div>
           <main className="rounded-xl bg-white p-4 shadow-lg sm:p-6 md:p-8">
-            {isLoading && <div className="mb-4"><LoadingMessage text="Loading boulder assignments…" /></div>}
-            {dataError && <div className="mb-4"><ErrorMessage message={dataError} /></div>}
-            <div className="mb-6 flex items-center gap-3"><SettingsIcon className="h-8 w-8 text-slate-700" /><h2 className="text-2xl font-bold text-slate-900 md:text-3xl">Boulder Assignment Settings</h2></div>
-            {assignmentSection}
+            {isLoading && <div className="mb-4"><LoadingMessage text="Loading settings…" /></div>}
+            {(dataError || (hasAssignmentAccess ? assignmentAccessError : '')) && <div className="mb-4"><ErrorMessage message={dataError || assignmentAccessError} /></div>}
+            <div className="mb-6 flex items-center gap-3"><SettingsIcon className="h-8 w-8 text-slate-700" /><h2 className="text-2xl font-bold text-slate-900 md:text-3xl">{hasAssignmentAccess ? 'Account & Boulder Settings' : 'Account Settings'}</h2></div>
+            <AccountPasswordSection currentUser={currentUser} />
+            {hasAssignmentAccess && assignmentSection}
           </main>
         </div>
       </div>
@@ -644,63 +604,9 @@ export default function Settings() {
 
           <div className="order-4"><AssessmentArchives username={currentUser.username} /></div>
 
-          {/* Change Password Section */}
-          <div className="order-5 border-b border-slate-200 pb-6 mb-6">
-            <div className="flex items-center gap-2 mb-4">
-              <Key className="w-5 h-5 text-slate-600" />
-              <h3 className="text-xl font-bold text-slate-900">Change Password</h3>
-            </div>
+          <div className="order-5"><AccountPasswordSection currentUser={currentUser} /></div>
 
-            <form onSubmit={handleChangePassword} className="space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">
-                  New Password
-                </label>
-                <input
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  required
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                  placeholder="Enter new password"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">
-                  Confirm Password
-                </label>
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  required
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                  placeholder="Confirm new password"
-                />
-              </div>
-
-              {passwordError && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm">
-                  {passwordError}
-                </div>
-              )}
-
-              {passwordSuccess && (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-green-700 text-sm">
-                  {passwordSuccess}
-                </div>
-              )}
-
-              <button
-                type="submit"
-                className="flex items-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg transition-colors shadow-md hover:shadow-lg"
-              >
-                <Save className="w-5 h-5" />
-                Change Password
-              </button>
-            </form>
-          </div>
+          <div className="order-6"><AdminPasswordResetSection users={users} currentUsername={currentUser.username} /></div>
 
           {/* Round Management Section */}
           <div id="manage-rounds" className="order-1 border-b border-slate-200 pb-6 mb-6">
@@ -771,7 +677,7 @@ export default function Settings() {
           {assignmentSection}
 
           {/* Create User Section */}
-          <div className="order-6 border-b border-slate-200 pb-6 mb-6">
+          <div className="order-7 border-b border-slate-200 pb-6 mb-6">
             <div className="flex items-center gap-2 mb-4">
               <UserPlus className="w-5 h-5 text-slate-600" />
               <h3 className="text-xl font-bold text-slate-900">Create New User</h3>
@@ -847,7 +753,7 @@ export default function Settings() {
           </div>
 
           {/* Users List */}
-          <div className="order-7">
+          <div className="order-8">
             <h3 className="text-xl font-bold text-slate-900 mb-4">Existing Users</h3>
 
             <div className="space-y-3 sm:hidden">{users.map((user) => <article key={user.key} className="rounded-xl border border-slate-200 p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-bold text-slate-900">{user.username}</p><p className="text-sm capitalize text-slate-600">{user.role.replace('-', ' ')}</p><p className="text-xs text-slate-500">Created {new Date(user.createdAt).toLocaleDateString()}</p></div>{user.username !== 'admin' && <button aria-label={`Delete user ${user.username}`} onClick={() => handleDeleteUser(user.key || '', user.username)} className="flex h-11 w-11 items-center justify-center rounded-lg bg-red-100 text-red-700"><Trash2 className="h-5 w-5" /></button>}</div></article>)}</div>

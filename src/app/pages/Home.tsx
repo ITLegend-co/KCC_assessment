@@ -33,7 +33,7 @@ export default function Home() {
     currentUser.role === 'chief-judge' ||
     currentUser.role === 'judge';
 
-  const canAccessSettings = canManageBoulderAssignments(currentUser, boulderAssignmentSettings);
+  const canManageAssignments = canManageBoulderAssignments(currentUser, boulderAssignmentSettings);
   const canAccessAssessment =
     currentUser.role === 'administrator' ||
     currentUser.role === 'coach';
@@ -74,6 +74,12 @@ export default function Home() {
                 : 'Registry'}
             </span>
           </div>
+          {currentUser.mustChangePassword && (
+            <Link to="/settings" className="mt-4 block rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 hover:bg-amber-100">
+              <strong className="block">Change your temporary password</strong>
+              We recommend updating it now in Account Settings.
+            </Link>
+          )}
         </div>
 
         <div className="space-y-4">
@@ -126,15 +132,17 @@ export default function Home() {
           )}
 
           <div className="pt-4 border-t border-slate-200 space-y-3">
-            {canAccessSettings && (
-              <Link
-                to="/settings"
-                className="flex items-center justify-center gap-3 w-full p-3 bg-slate-600 hover:bg-slate-700 text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg"
-              >
-                <Settings className="w-5 h-5" />
-                {currentUser.role === 'administrator' ? 'Settings' : 'Boulder Assignments'}
-              </Link>
-            )}
+            <Link
+              to="/settings"
+              className="flex items-center justify-center gap-3 w-full p-3 bg-slate-600 hover:bg-slate-700 text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg"
+            >
+              <Settings className="w-5 h-5" />
+              {currentUser.role === 'administrator'
+                ? 'Settings'
+                : canManageAssignments
+                ? 'Account & Boulder Settings'
+                : 'Account Settings'}
+            </Link>
 
             <button
               onClick={handleLogout}

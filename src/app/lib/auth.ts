@@ -8,12 +8,16 @@ export interface User {
   password: string;
   role: UserRole;
   createdAt: string;
+  mustChangePassword?: boolean;
+  passwordChangedAt?: string;
+  passwordResetAt?: string;
   key?: string;
 }
 
 export interface CurrentUser {
   username: string;
   role: UserRole;
+  mustChangePassword?: boolean;
   key?: string;
 }
 
@@ -34,9 +38,13 @@ export const login = async (username: string, password: string): Promise<Current
 
   if (userKey) {
     const user = users[userKey];
+    const mustChangePassword = user.mustChangePassword === true || (
+      user.mustChangePassword === undefined && !user.passwordChangedAt
+    );
     return {
       username: user.username,
       role: user.role,
+      mustChangePassword,
       key: userKey,
     };
   }
