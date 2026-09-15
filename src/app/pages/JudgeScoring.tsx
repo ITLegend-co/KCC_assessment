@@ -880,17 +880,17 @@ const startCreateNew = () => {
                   </p>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-3">
+                <div className={`grid gap-3 ${assignmentRequired ? 'sm:grid-cols-2' : 'sm:grid-cols-3'}`}>
                 <button
                   type="button"
                   onClick={scoreNextStudent}
                   className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-3 font-semibold text-white"
                 >Keep Round + Boulder<br />Next Student</button>
-                <button
+                {!assignmentRequired && <button
                   type="button"
                   onClick={scoreNextBoulder}
                   className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-3 font-semibold text-white"
-                >Keep Round + Student<br />Next Boulder</button>
+                >Keep Round + Student<br />Next Boulder</button>}
                 <button
                   type="button"
                   onClick={resetForm}

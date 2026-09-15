@@ -71,7 +71,7 @@ export function isBoulderAssignmentEnabled(
   role: UserRole | undefined,
   settings: BoulderAssignmentSettings,
 ) {
-  if (role === 'judge') return settings.judgesEnabled;
+  if (role === 'judge' || role === 'chief-judge') return settings.judgesEnabled;
   if (role === 'coach') return settings.coachesEnabled;
   return false;
 }

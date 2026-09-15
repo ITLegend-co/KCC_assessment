@@ -311,7 +311,7 @@ export default function Settings() {
     setAssignmentSaving(true);
 
     try {
-      const assignableUsers = users.filter((user) => user.role === 'judge' || user.role === 'coach');
+      const assignableUsers = users.filter((user) => user.role === 'judge' || user.role === 'chief-judge' || user.role === 'coach');
       const nextAssignments = { ...boulderAssignmentSettings.assignments };
 
       assignableUsers.forEach((user) => {
@@ -470,7 +470,7 @@ export default function Settings() {
     return null;
   }
 
-  const assignmentTargets = users.filter((user) => user.role === 'judge' || user.role === 'coach');
+  const assignmentTargets = users.filter((user) => user.role === 'judge' || user.role === 'chief-judge' || user.role === 'coach');
   const permissionCandidates = users.filter((user) => user.role !== 'administrator');
   const getUserAssignment = (user: ManagedUser) => {
     if (user.key && boulderAssignmentSettings.assignments[user.key]) {
@@ -500,7 +500,7 @@ export default function Settings() {
               onChange={(event) => setBoulderAssignmentSettings((current) => ({ ...current, judgesEnabled: event.target.checked }))}
               className="h-5 w-5"
             />
-            <span><strong className="block text-slate-900">Enable for Judges</strong><span className="text-xs text-slate-600">Judge panel uses the assigned boulder.</span></span>
+            <span><strong className="block text-slate-900">Enable for Judges</strong><span className="text-xs text-slate-600">Judge and Chief Judge panels use the assigned boulder.</span></span>
           </label>
           <label className="flex min-h-14 items-center gap-3 rounded-xl border border-slate-200 p-4 hover:bg-slate-50">
             <input
@@ -542,9 +542,9 @@ export default function Settings() {
       <div className="space-y-4">
         {assignmentTargets.map((user) => {
           const assignment = getUserAssignment(user);
-          const enabledForRole = user.role === 'judge'
-            ? boulderAssignmentSettings.judgesEnabled
-            : boulderAssignmentSettings.coachesEnabled;
+          const enabledForRole = user.role === 'coach'
+            ? boulderAssignmentSettings.coachesEnabled
+            : boulderAssignmentSettings.judgesEnabled;
           return (
             <article key={user.key || user.username} className="rounded-xl border border-slate-200 p-4">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
