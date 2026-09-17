@@ -27,6 +27,7 @@ interface Score {
   boulder: number;
   at: number | null;
   az: number | null;
+  attemptCount?: number;
   timestamp?: number;
   version?: number;
   key?: string;
@@ -164,7 +165,7 @@ export function RankingBoard({ showCopyLink = false, showAssessmentResults = fal
         }
 
         summary[s.id].points = Number(
-          (summary[s.id].points + calculateBoulderPoints(s.at, s.az)).toFixed(1),
+          (summary[s.id].points + calculateBoulderPoints(s.at, s.az, s.attemptCount)).toFixed(1),
         );
       });
 
@@ -529,7 +530,7 @@ export function RankingBoard({ showCopyLink = false, showAssessmentResults = fal
           </div>
           <div className="flex items-center gap-2">
             <span className="font-semibold">Zone only:</span>
-            <span>10.0 − 0.1 per failed attempt before Zone</span>
+            <span>10.0 − 0.1 per attempt after the first when Zone is reached</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="font-semibold">Per boulder:</span>

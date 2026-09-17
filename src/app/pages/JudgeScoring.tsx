@@ -239,8 +239,8 @@ const [scoreSortOrder, setScoreSortOrder] = useState<'asc' | 'desc'>('asc');
         valueA = a.az ?? 9999;
         valueB = b.az ?? 9999;
       } else if (scoreSortBy === 'points') {
-        valueA = calculateBoulderPoints(a.at, a.az);
-        valueB = calculateBoulderPoints(b.at, b.az);
+        valueA = calculateBoulderPoints(a.at, a.az, a.attemptCount);
+        valueB = calculateBoulderPoints(b.at, b.az, b.attemptCount);
       }
 
       if (valueA < valueB) return scoreSortOrder === 'asc' ? -1 : 1;
@@ -333,7 +333,7 @@ const [scoreSortOrder, setScoreSortOrder] = useState<'asc' | 'desc'>('asc');
       at: at ?? null,
       az: az ?? null,
       attemptCount: attemptCount ?? 0,
-      points: calculateBoulderPoints(at, az),
+      points: calculateBoulderPoints(at, az, attemptCount),
       timestamp: Date.now(),
       version: nextVersion,
     };
@@ -601,9 +601,9 @@ const startCreateNew = () => {
   };
 
   const pointDisplay = at
-    ? `${calculateBoulderPoints(at, az).toFixed(1)} / 25`
+    ? `${calculateBoulderPoints(at, az, attemptCount).toFixed(1)} / 25`
     : az
-      ? `${calculateBoulderPoints(at, az).toFixed(1)} / 10.0`
+      ? `${calculateBoulderPoints(at, az, attemptCount).toFixed(1)} / 10.0`
       : '0.0 / 0.0';
 
   const handleShowHistory = (id: string, round: string, boulder: number) => {
@@ -1055,7 +1055,7 @@ const startCreateNew = () => {
                             {score.az ?? '-'}
                           </td>
                           <td className="px-3 py-3 text-sm text-center font-bold text-blue-600">
-                            {calculateBoulderPoints(score.at, score.az).toFixed(1)}
+                            {calculateBoulderPoints(score.at, score.az, score.attemptCount).toFixed(1)}
                           </td>
                           <td className="px-3 py-3 text-center">
                             {hasHistory ? (
@@ -1120,7 +1120,7 @@ const startCreateNew = () => {
           <p><strong>Boulder:</strong> {boulder}</p>
           <p><strong>Latest AT:</strong> {clashLatestScore.at ?? '-'}</p>
           <p><strong>Latest AZ:</strong> {clashLatestScore.az ?? '-'}</p>
-          <p><strong>Points:</strong> {calculateBoulderPoints(clashLatestScore.at, clashLatestScore.az).toFixed(1)}</p>
+          <p><strong>Points:</strong> {calculateBoulderPoints(clashLatestScore.at, clashLatestScore.az, clashLatestScore.attemptCount).toFixed(1)}</p>
           <p><strong>Version:</strong> {clashLatestScore.version || 1}</p>
         </div>
 
@@ -1243,7 +1243,7 @@ const startCreateNew = () => {
                         <div>
                           <span className="text-sm text-slate-600">Points:</span>{' '}
                           <span className="text-lg font-bold text-blue-600">
-                            {calculateBoulderPoints(score.at, score.az).toFixed(1)}
+                            {calculateBoulderPoints(score.at, score.az, score.attemptCount).toFixed(1)}
                           </span>
                         </div>
                         <div>
