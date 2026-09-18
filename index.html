@@ -12,6 +12,14 @@
       <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
       <meta name="apple-mobile-web-app-title" content="KCC Assessment" />
       <title>KCC Bouldering Assessment</title>
+      <script>
+        try {
+          var savedKccTheme = localStorage.getItem('kcc-assessment-theme');
+          document.documentElement.dataset.kccTheme = savedKccTheme === 'light' ? 'light' : 'dark';
+        } catch (error) {
+          document.documentElement.dataset.kccTheme = 'dark';
+        }
+      </script>
       <style>html, body { height: 100%; margin: 0; } #root { height: 100%; }</style>
     </head>
 

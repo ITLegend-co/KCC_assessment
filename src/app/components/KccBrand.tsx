@@ -19,3 +19,16 @@ export function KccFooter() {
     </footer>
   );
 }
+
+export function KccWallDecor() {
+  return (
+    <div className="kcc-wall-decor" aria-hidden="true">
+      <span className="kcc-hold kcc-hold-one" />
+      <span className="kcc-hold kcc-hold-two" />
+      <span className="kcc-hold kcc-hold-three" />
+      <span className="kcc-hold kcc-hold-four" />
+      <span className="kcc-hold kcc-hold-five" />
+      <span className="kcc-hold kcc-hold-six" />
+    </div>
+  );
+}

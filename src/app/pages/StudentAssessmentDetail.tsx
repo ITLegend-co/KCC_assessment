@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router';
-import { ArrowLeft, ClipboardList, GraduationCap } from 'lucide-react';
+import { useParams } from 'react-router';
+import { ClipboardList, GraduationCap } from 'lucide-react';
 import { onValue, ref } from 'firebase/database';
 import { database } from '../lib/firebase';
 import { ErrorMessage, LoadingMessage } from '../components/StatusMessage';
+import { BackButton } from '../components/BackButton';
 import { useRounds } from '../hooks/useRounds';
 import { getBoulderRange, useCompetitionSettings } from '../lib/competition';
 import { useStudentAssessments } from '../hooks/useStudentAssessments';
@@ -81,9 +82,9 @@ export default function StudentAssessmentDetail() {
   const error = studentError || assessmentsError || settingsError;
 
   return (
-    <div className="kcc-page min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 p-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-4 md:p-6">
+    <div className="kcc-page kcc-results-page min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 p-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-4 md:p-6">
       <div className="mx-auto max-w-7xl">
-        <div className="mb-6"><Link to="/assessment-results" className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-white px-4 text-slate-700 shadow-sm hover:bg-slate-50 hover:text-slate-900"><ArrowLeft className="h-4 w-4" /> Back to Assessment Results</Link></div>
+        <div className="mb-6"><BackButton to="/assessment-results" label="Back to Assessment Results" title="Assessment" accent="Details" /></div>
         {loading && <div className="mb-4"><LoadingMessage text="Loading detailed assessment…" /></div>}
         {error && <div className="mb-4"><ErrorMessage message={error} /></div>}
 

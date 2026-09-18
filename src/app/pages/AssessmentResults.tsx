@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { ArrowLeft, GraduationCap, Search, Trash2 } from 'lucide-react';
+import { GraduationCap, Search, Trash2 } from 'lucide-react';
 import { AnimatePresence } from 'motion/react';
 import { onValue, ref, set, update } from 'firebase/database';
 import { database } from '../lib/firebase';
@@ -121,9 +121,9 @@ export default function AssessmentResults() {
   const visibleColumnCount = 2 + Object.values(fields).filter(Boolean).length + (isAdministrator ? 1 : 0);
 
   return (
-    <div className="kcc-page min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 p-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-4 md:p-6">
+    <div className="kcc-page kcc-results-page min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 p-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-4 md:p-6">
       <div className="mx-auto max-w-6xl">
-        <div className="mb-6">{currentUser ? <BackButton /> : <Link to="/ranking-only" className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-white px-4 text-slate-700 shadow-sm hover:bg-slate-50 hover:text-slate-900"><ArrowLeft className="h-4 w-4" /> Back to Ranking</Link>}</div>
+        <div className="mb-6"><BackButton to={currentUser ? '/' : '/ranking-only'} label={currentUser ? 'Back to Home' : 'Back to Ranking'} title="Assessment" accent="Results" /></div>
         <main className="kcc-panel overflow-hidden rounded-xl bg-white shadow-lg">
           <div className="border-b border-slate-200 p-4 sm:p-6">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">

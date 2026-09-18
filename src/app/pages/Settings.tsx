@@ -730,9 +730,9 @@ export default function Settings() {
 
   if (!isAdministrator) {
     return (
-      <div className="kcc-page min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:p-6">
+      <div className="kcc-page kcc-settings-page min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:p-6">
         <div className="mx-auto max-w-4xl">
-          <div className="mb-6"><BackButton /></div>
+          <div className="mb-6"><BackButton title="Account" accent="Settings" /></div>
           <main className="kcc-panel rounded-xl bg-white p-4 shadow-lg sm:p-6 md:p-8">
             {isLoading && <div className="mb-4"><LoadingMessage text="Loading settings…" /></div>}
             {(dataError || (hasAssignmentAccess ? assignmentAccessError : '')) && <div className="mb-4"><ErrorMessage message={dataError || assignmentAccessError} /></div>}
@@ -746,10 +746,10 @@ export default function Settings() {
   }
 
   return (
-    <div className="kcc-page min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:p-6">
+    <div className="kcc-page kcc-settings-page min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:p-6">
       <div className="max-w-4xl mx-auto">
         <div className="mb-6">
-          <BackButton />
+          <BackButton title="Administrator" accent="Settings" />
         </div>
 
         <div className="kcc-panel flex flex-col bg-white rounded-xl shadow-lg p-4 sm:p-6 md:p-8 mb-6">

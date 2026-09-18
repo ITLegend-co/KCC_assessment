@@ -418,10 +418,10 @@ export function RankingBoard({ showCopyLink = false, showAssessmentResults = fal
 
   return (
     <>
-      <div className="kcc-panel bg-white rounded-xl shadow-lg p-3 sm:p-6 md:p-8 mb-6">
+      <div className="kcc-panel kcc-ranking-board bg-white rounded-xl shadow-lg p-3 sm:p-6 md:p-8 mb-6">
         {(studentsLoading || scoresLoading || settingsLoading) && <div className="mb-4"><LoadingMessage text="Loading rankings…" /></div>}
         {(dataError || settingsError) && <div className="mb-4"><ErrorMessage message={dataError || settingsError} /></div>}
-        <div className="flex flex-col gap-4 mb-6">
+        <div className="kcc-ranking-controls flex flex-col gap-4 mb-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <h2 className="text-2xl md:text-3xl font-bold text-slate-900">Student Ranking</h2>
 
@@ -444,7 +444,7 @@ export function RankingBoard({ showCopyLink = false, showAssessmentResults = fal
 
           <div className="flex flex-col sm:flex-row gap-3">
             {/* Gender Filter */}
-            <div className="flex items-center gap-2 bg-slate-100 rounded-lg p-1">
+            <div className="kcc-segmented flex items-center gap-2 bg-slate-100 rounded-lg p-1">
               <button
                 onClick={() => setGenderFilter('both')}
                 className={`px-4 py-2 rounded-md font-medium text-sm transition-colors ${
@@ -491,7 +491,7 @@ export function RankingBoard({ showCopyLink = false, showAssessmentResults = fal
 
             {/* Copy Link Button */}
             {showCopyLink && (
-              <div className="flex flex-col gap-2 sm:flex-row">
+              <div className="kcc-ranking-actions flex flex-col gap-2 sm:flex-row">
                 <button onClick={handleCopyLink} className="flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg transition-colors shadow-md">
                 {linkCopied ? (
                   <>

@@ -617,10 +617,10 @@ const startCreateNew = () => {
   }
 
   return (
-    <div className="kcc-page min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:p-6">
+    <div className="kcc-page kcc-judge-page min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:p-6">
       <div className="max-w-4xl mx-auto">
         <div className="mb-6">
-          <BackButton />
+          <BackButton title="Judge" accent="Scoring" />
         </div>
 
         {!isOnline && <div className="mb-4"><OfflineMessage /></div>}
@@ -633,7 +633,7 @@ const startCreateNew = () => {
           </h2>
 
           {/* Step Indicator */}
-          <div className="mb-6">
+          <div className="kcc-stepper mb-6">
             <div className="flex w-full items-start pb-2">
               {(canViewScores ? ['Round', 'Student', 'Boulder', 'Scoring', 'Records'] : ['Round', 'Student', 'Boulder', 'Scoring']).map((label, index) => {
                 const step = index + 1;
@@ -803,7 +803,7 @@ const startCreateNew = () => {
                   Back (Undo Last Action)
                 </button>
 
-                <div className="grid grid-cols-3 gap-3">
+                <div className="kcc-scoring-actions grid grid-cols-3 gap-3">
   <button
     type="button"
     onClick={() => recordAttempt('fall')}

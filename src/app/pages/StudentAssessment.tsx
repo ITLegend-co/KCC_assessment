@@ -297,9 +297,9 @@ export default function StudentAssessment() {
   const steps = ['Round', 'Student', 'Boulder', 'Evaluation', 'Saved'];
 
   return (
-    <div className="kcc-page min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:p-6">
+    <div className="kcc-page kcc-assessment-page min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:p-6">
       <div className="mx-auto max-w-4xl">
-        <div className="mb-6"><BackButton /></div>
+        <div className="mb-6"><BackButton title="Student" accent="Assessment" /></div>
         {!isOnline && <div className="mb-4"><OfflineMessage /></div>}
         {(studentsLoading || assessmentsLoading || settingsLoading || assignmentsLoading) && <div className="mb-4"><LoadingMessage text="Loading student assessment…" /></div>}
         {(dataError || assessmentsError || settingsError || assignmentsError) && <div className="mb-4"><ErrorMessage message={dataError || assessmentsError || settingsError || assignmentsError} /></div>}
@@ -313,7 +313,7 @@ export default function StudentAssessment() {
             </div>
           </div>
 
-          <div className="mb-6 flex w-full items-start pb-2">
+          <div className="kcc-stepper mb-6 flex w-full items-start pb-2">
             {steps.map((label, index) => {
               const step = index + 1;
               return <div key={label} className="relative flex min-w-0 flex-1 flex-col items-center">

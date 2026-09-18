@@ -326,10 +326,10 @@ export default function StudentRegistration() {
   if (!currentUser || !canAccessRegistration) return null;
 
   return (
-    <div className="kcc-page min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:p-6">
+    <div className="kcc-page kcc-registration-page min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:p-6">
       <div className="max-w-4xl mx-auto">
         <div className="mb-6">
-          <BackButton />
+          <BackButton title="Register" accent="Student" subtitle="Participant Information" />
         </div>
 
         {!isOnline && <div className="mb-4"><OfflineMessage /></div>}

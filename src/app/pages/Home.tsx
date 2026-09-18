@@ -95,10 +95,10 @@ export default function Home() {
         <div className="text-center mb-8">
           <KccLogo className="mb-4 h-28 w-auto" />
           <h1 className="text-3xl md:text-4xl font-bold text-slate-900 mb-2">
-            <span className="text-white">Bouldering</span> <span className="text-amber-400">System</span>
+            <span className="text-amber-400">KCC</span> Youth Level Assessment
           </h1>
-          <p className="text-slate-600">Competition Management</p>
-          <div className="mt-4 inline-flex max-w-full flex-wrap items-center justify-center px-3 py-2 bg-slate-100 rounded-lg">
+          <p className="text-slate-600">Bouldering Competition Management</p>
+          <div className="kcc-user-chip mt-4 inline-flex max-w-full flex-wrap items-center justify-center px-3 py-2 bg-slate-100 rounded-lg">
             <span className="text-sm text-slate-600">Logged in as:</span>
             <span className="ml-2 font-semibold text-slate-900">{currentUser.username}</span>
             <span
