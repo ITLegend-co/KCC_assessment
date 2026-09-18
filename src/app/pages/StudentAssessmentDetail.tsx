@@ -81,7 +81,7 @@ export default function StudentAssessmentDetail() {
   const error = studentError || assessmentsError || settingsError;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 p-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-4 md:p-6">
+    <div className="kcc-page min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 p-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-4 md:p-6">
       <div className="mx-auto max-w-7xl">
         <div className="mb-6"><Link to="/assessment-results" className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-white px-4 text-slate-700 shadow-sm hover:bg-slate-50 hover:text-slate-900"><ArrowLeft className="h-4 w-4" /> Back to Assessment Results</Link></div>
         {loading && <div className="mb-4"><LoadingMessage text="Loading detailed assessment…" /></div>}

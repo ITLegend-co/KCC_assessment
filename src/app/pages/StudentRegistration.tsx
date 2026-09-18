@@ -326,7 +326,7 @@ export default function StudentRegistration() {
   if (!currentUser || !canAccessRegistration) return null;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:p-6">
+    <div className="kcc-page min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:p-6">
       <div className="max-w-4xl mx-auto">
         <div className="mb-6">
           <BackButton />
@@ -335,7 +335,7 @@ export default function StudentRegistration() {
         {!isOnline && <div className="mb-4"><OfflineMessage /></div>}
         {bibSettingsLoading && <div className="mb-4"><LoadingMessage text="Loading BIB number settings…" /></div>}
         {bibSettingsError && <div className="mb-4"><ErrorMessage message={bibSettingsError} /></div>}
-        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 md:p-8 mb-6">
+        <div className="kcc-panel bg-white rounded-xl shadow-lg p-4 sm:p-6 md:p-8 mb-6">
           <h2 className="text-2xl md:text-3xl font-bold text-slate-900 mb-6">
             Student Contestant Registration
           </h2>
@@ -433,7 +433,7 @@ export default function StudentRegistration() {
           </form>
         </div>
 
-        <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+        <div className="kcc-panel bg-white rounded-xl shadow-lg overflow-hidden">
           {isLoading ? <div className="p-4"><LoadingMessage text="Loading students…" /></div> : dataError ? <div className="p-4"><ErrorMessage message={dataError} /></div> : null}
           {!isLoading && !dataError && <div className="space-y-3 p-3 sm:hidden">
             {sortedStudents.map((student) => <article key={student.key} className="rounded-xl border border-slate-200 p-4 shadow-sm">

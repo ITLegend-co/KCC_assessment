@@ -46,7 +46,7 @@ export function QrCodeCard({ value, title, subtitle, fileName, prominentSubtitle
   if (!dataUrl) return null;
 
   return (
-    <div className="max-h-[90dvh] overflow-y-auto rounded-xl border-2 border-slate-200 bg-white p-4 text-center shadow-sm sm:p-5">
+    <div className="kcc-qr-card max-h-[90dvh] overflow-y-auto rounded-xl border-2 border-slate-200 bg-white p-4 text-center shadow-sm sm:p-5">
       <h3 className="text-xl font-bold text-slate-900">{title}</h3>
       {subtitle && <p className={prominentSubtitle ? 'mt-2 break-all text-4xl font-extrabold tracking-wide text-slate-900 sm:text-5xl' : 'mt-1 break-words text-slate-600'}>{subtitle}</p>}
       <img src={dataUrl} alt={`${title} QR code`} className={`mx-auto my-3 w-full ${prominentSubtitle ? 'max-w-48 sm:max-w-56' : 'max-w-64 sm:max-w-72'}`} />

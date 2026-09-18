@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router';
 import { UserPlus, ClipboardCheck, Trophy, LogOut, Settings, QrCode, GraduationCap, Download, X, Globe2, Smartphone, Share2 } from 'lucide-react';
 import { getCurrentUser, logout } from '../lib/auth';
 import { canManageBoulderAssignments, useBoulderAssignmentSettings } from '../lib/boulderAssignments';
+import { KccLogo } from '../components/KccBrand';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -89,11 +90,12 @@ export default function Home() {
   const canAccessQrGenerator = currentUser.role !== 'coach';
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 flex items-start justify-center p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:items-center">
-      <div className="bg-white rounded-2xl shadow-2xl p-5 sm:p-8 md:p-12 w-full max-w-md">
+    <div className="kcc-page kcc-home-page min-h-screen bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 flex items-start justify-center p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:items-center">
+      <div className="kcc-panel kcc-home-card bg-white rounded-2xl shadow-2xl p-5 sm:p-8 md:p-12 w-full max-w-md">
         <div className="text-center mb-8">
+          <KccLogo className="mb-4 h-28 w-auto" />
           <h1 className="text-3xl md:text-4xl font-bold text-slate-900 mb-2">
-            Bouldering System
+            <span className="text-white">Bouldering</span> <span className="text-amber-400">System</span>
           </h1>
           <p className="text-slate-600">Competition Management</p>
           <div className="mt-4 inline-flex max-w-full flex-wrap items-center justify-center px-3 py-2 bg-slate-100 rounded-lg">
@@ -131,7 +133,7 @@ export default function Home() {
           )}
         </div>
 
-        <div className="space-y-4">
+        <div className="kcc-home-actions space-y-4">
           {canAccessRegistration && (
             <Link
               to="/registration"

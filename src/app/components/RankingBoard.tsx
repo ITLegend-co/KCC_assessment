@@ -418,7 +418,7 @@ export function RankingBoard({ showCopyLink = false, showAssessmentResults = fal
 
   return (
     <>
-      <div className="bg-white rounded-xl shadow-lg p-3 sm:p-6 md:p-8 mb-6">
+      <div className="kcc-panel bg-white rounded-xl shadow-lg p-3 sm:p-6 md:p-8 mb-6">
         {(studentsLoading || scoresLoading || settingsLoading) && <div className="mb-4"><LoadingMessage text="Loading rankings…" /></div>}
         {(dataError || settingsError) && <div className="mb-4"><ErrorMessage message={dataError || settingsError} /></div>}
         <div className="flex flex-col gap-4 mb-6">

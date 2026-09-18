@@ -297,14 +297,14 @@ export default function StudentAssessment() {
   const steps = ['Round', 'Student', 'Boulder', 'Evaluation', 'Saved'];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:p-6">
+    <div className="kcc-page min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:p-6">
       <div className="mx-auto max-w-4xl">
         <div className="mb-6"><BackButton /></div>
         {!isOnline && <div className="mb-4"><OfflineMessage /></div>}
         {(studentsLoading || assessmentsLoading || settingsLoading || assignmentsLoading) && <div className="mb-4"><LoadingMessage text="Loading student assessment…" /></div>}
         {(dataError || assessmentsError || settingsError || assignmentsError) && <div className="mb-4"><ErrorMessage message={dataError || assessmentsError || settingsError || assignmentsError} /></div>}
 
-        <main className="rounded-xl bg-white p-4 shadow-lg sm:p-6 md:p-8">
+        <main className="kcc-panel rounded-xl bg-white p-4 shadow-lg sm:p-6 md:p-8">
           <div className="mb-6 flex items-center gap-3">
             <GraduationCap className="h-8 w-8 text-cyan-700" />
             <div>

@@ -8,7 +8,7 @@ export default function AppError() {
     ? describeError(new Error(`${routeError.status} ${routeError.statusText}`), 'The page could not be opened.')
     : describeError(routeError, 'An unexpected application error occurred.');
 
-  return <main className="flex min-h-screen items-center justify-center bg-slate-100 p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+  return <main className="kcc-page flex min-h-screen items-center justify-center bg-slate-100 p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
     <section className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl sm:p-8" role="alert">
       <AlertTriangle className="h-12 w-12 text-red-600" />
       <h1 className="mt-4 text-2xl font-bold text-slate-900">Something went wrong</h1>

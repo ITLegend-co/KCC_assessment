@@ -4,6 +4,7 @@ import { LogIn, User, Lock, Eye, EyeOff, CircleHelp, Send } from 'lucide-react';
 import { login, setCurrentUser } from '../lib/auth';
 import { requestPasswordReset } from '../lib/passwords';
 import { describeError } from '../lib/appError';
+import { KccFooter, KccLogo } from '../components/KccBrand';
 
 export default function Login() {
   const [username, setUsername] = useState('');
@@ -68,16 +69,18 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center p-4">
+    <div className="kcc-page min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 flex flex-col p-4">
+      <div className="flex flex-1 items-center justify-center">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
+          <KccLogo className="mx-auto mb-4 h-32 w-auto" />
           <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-2">
-            🧗 Bouldering Competition
+            <span className="text-white">Bouldering</span> <span className="text-amber-400">System</span>
           </h1>
-          <p className="text-slate-600">Sign in to continue</p>
+          <p className="text-slate-600">Competition Management · Sign in to continue</p>
         </div>
 
-        <div className="bg-white rounded-xl shadow-lg p-5 sm:p-8">
+        <div className="kcc-panel bg-white rounded-xl shadow-lg p-5 sm:p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label htmlFor="login-username" className="block text-sm font-semibold text-slate-700 mb-2">
@@ -157,6 +160,8 @@ export default function Login() {
           )}
         </div>
       </div>
+      </div>
+      <KccFooter />
     </div>
   );
 }

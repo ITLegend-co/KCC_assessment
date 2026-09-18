@@ -61,10 +61,10 @@ export default function QrGenerator() {
   if (!currentUser || currentUser.role === 'coach') return null;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:p-6">
+    <div className="kcc-page min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:p-6">
       <div className="mx-auto max-w-4xl">
         <div className="mb-6"><BackButton /></div>
-        <div className="rounded-xl bg-white p-4 shadow-lg sm:p-6 md:p-8">
+        <div className="kcc-panel rounded-xl bg-white p-4 shadow-lg sm:p-6 md:p-8">
           {isLoading && <div className="mb-4"><LoadingMessage text="Loading registered students…" /></div>}
           {dataError && <div className="mb-4"><ErrorMessage message={dataError} /></div>}
           <h2 className="mb-2 text-2xl font-bold text-slate-900 sm:text-3xl">Generate QR Codes</h2>

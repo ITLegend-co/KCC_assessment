@@ -1,17 +1,20 @@
 import { RankingBoard } from '../components/RankingBoard';
+import { KccFooter, KccLogo } from '../components/KccBrand';
 
 export default function RankingOnly() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 p-2 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-4 md:p-6">
+    <div className="kcc-page min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 p-2 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
         <div className="mb-4 sm:mb-6 px-2 text-center">
+          <KccLogo className="mx-auto mb-3 h-24 w-auto sm:h-28" />
           <h1 className="text-2xl sm:text-3xl md:text-4xl leading-tight font-bold text-slate-900 mb-2">
-            🧗 Bouldering Competition Rankings
+            Bouldering Competition <span className="text-amber-400">Rankings</span>
           </h1>
           <p className="text-sm sm:text-base text-slate-600">Live Results - Auto-refreshing</p>
         </div>
         <RankingBoard showCopyLink={false} showAssessmentResults={true} />
       </div>
+      <KccFooter />
     </div>
   );
 }

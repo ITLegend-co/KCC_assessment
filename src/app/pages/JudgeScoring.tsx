@@ -617,7 +617,7 @@ const startCreateNew = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:p-6">
+    <div className="kcc-page min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:p-6">
       <div className="max-w-4xl mx-auto">
         <div className="mb-6">
           <BackButton />
@@ -626,7 +626,7 @@ const startCreateNew = () => {
         {!isOnline && <div className="mb-4"><OfflineMessage /></div>}
         {(studentsLoading || scoresLoading || settingsLoading || assignmentsLoading) && <div className="mb-4"><LoadingMessage text="Loading judging data…" /></div>}
         {(dataError || settingsError || assignmentsError) && <div className="mb-4"><ErrorMessage message={dataError || settingsError || assignmentsError} /></div>}
-        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 md:p-8 mb-6">
+        <div className="kcc-panel bg-white rounded-xl shadow-lg p-4 sm:p-6 md:p-8 mb-6">
           {actionError && <div className="mb-4"><ErrorMessage message={actionError} /></div>}
           <h2 className="text-2xl md:text-3xl font-bold text-slate-900 mb-6">
             Judge Scoring – Student Category
@@ -837,7 +837,7 @@ const startCreateNew = () => {
     className={`px-4 py-3 font-semibold rounded-lg transition-colors shadow-md ${
       isTopReached
         ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
-        : 'bg-emerald-600 hover:bg-emerald-700 text-white hover:shadow-lg'
+        : 'kcc-keep-green bg-emerald-600 hover:bg-emerald-700 text-white hover:shadow-lg'
     }`}
   >
     Top
@@ -907,7 +907,7 @@ const startCreateNew = () => {
         </div>
 
         {canViewScores && (
-          <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+          <div className="kcc-panel bg-white rounded-xl shadow-lg overflow-hidden">
             {/* Table Header with Actions */}
             {getLatestScores().length > 0 && (
               <div className="p-4 bg-slate-100 border-b border-slate-200 flex items-center justify-between flex-wrap gap-3">

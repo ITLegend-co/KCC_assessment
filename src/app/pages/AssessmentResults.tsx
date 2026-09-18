@@ -121,10 +121,10 @@ export default function AssessmentResults() {
   const visibleColumnCount = 2 + Object.values(fields).filter(Boolean).length + (isAdministrator ? 1 : 0);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 p-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-4 md:p-6">
+    <div className="kcc-page min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 p-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-4 md:p-6">
       <div className="mx-auto max-w-6xl">
         <div className="mb-6">{currentUser ? <BackButton /> : <Link to="/ranking-only" className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-white px-4 text-slate-700 shadow-sm hover:bg-slate-50 hover:text-slate-900"><ArrowLeft className="h-4 w-4" /> Back to Ranking</Link>}</div>
-        <main className="overflow-hidden rounded-xl bg-white shadow-lg">
+        <main className="kcc-panel overflow-hidden rounded-xl bg-white shadow-lg">
           <div className="border-b border-slate-200 p-4 sm:p-6">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex items-center gap-3">
