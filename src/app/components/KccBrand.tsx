@@ -1,11 +1,15 @@
+import { useTheme } from './ThemeProvider';
+
 interface KccLogoProps {
   className?: string;
 }
 
 export function KccLogo({ className = '' }: KccLogoProps) {
+  const { theme } = useTheme();
+
   return (
     <img
-      src={`${import.meta.env.BASE_URL}favicon.png`}
+      src={`${import.meta.env.BASE_URL}kcc-logo-${theme}.png`}
       alt="Kinabalu Climbing Club (KCC)"
       className={`kcc-logo ${className}`}
     />

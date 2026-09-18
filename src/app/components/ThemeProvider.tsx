@@ -44,7 +44,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 
-function useTheme() {
+export function useTheme() {
   const context = useContext(ThemeContext);
   if (!context) throw new Error('useTheme must be used inside ThemeProvider');
   return context;

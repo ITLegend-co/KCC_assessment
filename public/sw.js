@@ -1,9 +1,11 @@
-const CACHE_NAME = 'kcc-assessment-v1';
+const CACHE_NAME = 'kcc-assessment-v2';
 const APP_SHELL = [
   '/KCC_assessment/',
   '/KCC_assessment/index.html',
   '/KCC_assessment/manifest.webmanifest',
   '/KCC_assessment/favicon.png',
+  '/KCC_assessment/kcc-logo-dark.png',
+  '/KCC_assessment/kcc-logo-light.png',
   '/KCC_assessment/icons/icon-192.png',
   '/KCC_assessment/icons/icon-512.png',
 ];
