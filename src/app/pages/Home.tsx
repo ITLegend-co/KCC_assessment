@@ -1,12 +1,23 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { UserPlus, ClipboardCheck, Trophy, LogOut, Settings, QrCode, GraduationCap } from 'lucide-react';
+import { UserPlus, ClipboardCheck, Trophy, LogOut, Settings, QrCode, GraduationCap, Download, X } from 'lucide-react';
 import { getCurrentUser, logout } from '../lib/auth';
 import { canManageBoulderAssignments, useBoulderAssignmentSettings } from '../lib/boulderAssignments';
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
+}
 
 export default function Home() {
   const navigate = useNavigate();
   const [currentUser] = useState(() => getCurrentUser());
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [showInstallHelp, setShowInstallHelp] = useState(false);
+  const [isInstalled, setIsInstalled] = useState(
+    () => window.matchMedia('(display-mode: standalone)').matches
+      || Boolean((navigator as Navigator & { standalone?: boolean }).standalone),
+  );
   const { settings: boulderAssignmentSettings } = useBoulderAssignmentSettings();
 
   useEffect(() => {
@@ -15,9 +26,41 @@ export default function Home() {
     }
   }, [currentUser, navigate]);
 
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as BeforeInstallPromptEvent);
+    };
+    const handleInstalled = () => {
+      setInstallPrompt(null);
+      setShowInstallHelp(false);
+      setIsInstalled(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleInstalled);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleInstalled);
+    };
+  }, []);
+
   const handleLogout = () => {
     logout();
     navigate('/login');
+  };
+
+  const handleInstall = async () => {
+    if (installPrompt) {
+      await installPrompt.prompt();
+      const choice = await installPrompt.userChoice;
+      if (choice.outcome === 'accepted') {
+        setInstallPrompt(null);
+      }
+      return;
+    }
+
+    setShowInstallHelp(true);
   };
 
   if (!currentUser) {
@@ -129,6 +172,36 @@ export default function Home() {
               <QrCode className="w-5 h-5" />
               Generate QR Codes
             </Link>
+          )}
+
+          <button
+            type="button"
+            onClick={handleInstall}
+            disabled={isInstalled}
+            className="flex w-full items-center justify-center gap-3 rounded-xl bg-indigo-600 p-4 font-semibold text-white shadow-lg transition-all hover:scale-[1.02] hover:bg-indigo-700 hover:shadow-xl active:scale-[0.98] disabled:cursor-default disabled:bg-emerald-600 disabled:hover:scale-100"
+          >
+            <Download className="h-5 w-5" />
+            {isInstalled ? 'Installed on This Device' : 'Install on Mobile'}
+          </button>
+
+          {showInstallHelp && !isInstalled && (
+            <div className="relative rounded-xl border border-indigo-200 bg-indigo-50 p-4 pr-10 text-left text-sm text-indigo-950">
+              <button
+                type="button"
+                onClick={() => setShowInstallHelp(false)}
+                aria-label="Close installation instructions"
+                className="absolute right-3 top-3 text-indigo-500 hover:text-indigo-800"
+              >
+                <X className="h-4 w-4" />
+              </button>
+              <strong className="mb-1 block">Install this app</strong>
+              <span className="block md:hidden">
+                On iPhone/iPad, open Safari, tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>. On Android, open the browser menu and select <strong>Install app</strong> or <strong>Add to Home screen</strong>.
+              </span>
+              <span className="hidden md:block">
+                Open your browser menu and select <strong>Install app</strong>. You can also open this page on your mobile device and use this button there.
+              </span>
+            </div>
           )}
 
           <div className="pt-4 border-t border-slate-200 space-y-3">
