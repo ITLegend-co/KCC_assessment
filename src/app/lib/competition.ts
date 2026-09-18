@@ -7,11 +7,13 @@ export type BoulderNumberingMode = 'per-round' | 'continuous';
 export interface CompetitionSettings {
   numberingMode: BoulderNumberingMode;
   boulderCounts: Record<string, number>;
+  showAllStudentsInRanking: boolean;
 }
 
 export const DEFAULT_COMPETITION_SETTINGS: CompetitionSettings = {
   numberingMode: 'continuous',
   boulderCounts: {},
+  showAllStudentsInRanking: false,
 };
 
 export function getBoulderRange(rounds: string[], selectedRound: string, settings: CompetitionSettings) {
@@ -33,6 +35,7 @@ export function useCompetitionSettings() {
       ...loaded,
       numberingMode: loaded.numberingMode === 'per-round' ? 'per-round' : 'continuous',
       boulderCounts: loaded.boulderCounts || {},
+      showAllStudentsInRanking: loaded.showAllStudentsInRanking === true,
     });
     setLoading(false);
     setError('');

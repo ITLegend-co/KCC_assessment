@@ -115,7 +115,7 @@ export function RankingBoard({ showCopyLink = false, showAssessmentResults = fal
 
   useEffect(() => {
     calculateRanking();
-  }, [selectedRound, scores, students, genderFilter]);
+  }, [selectedRound, scores, students, genderFilter, competitionSettings.showAllStudentsInRanking]);
 
   // Get only the latest version of each score
   const getLatestScores = (): Score[] => {
@@ -148,6 +148,17 @@ export function RankingBoard({ showCopyLink = false, showAssessmentResults = fal
 
   const calculateRanking = () => {
     const summary: { [key: string]: RankingEntry } = {};
+
+    if (competitionSettings.showAllStudentsInRanking) {
+      students.forEach((student) => {
+        summary[student.id] = {
+          id: student.id,
+          name: student.name,
+          points: 0,
+          gender: student.gender || 'male',
+        };
+      });
+    }
 
     getLatestScores()
       .filter((s) => s.round === selectedRound)

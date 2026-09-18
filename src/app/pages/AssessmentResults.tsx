@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { ArrowLeft, FileSpreadsheet, GraduationCap, Search, Trash2 } from 'lucide-react';
+import { ArrowLeft, GraduationCap, Search, Trash2 } from 'lucide-react';
 import { AnimatePresence } from 'motion/react';
 import { onValue, ref, set, update } from 'firebase/database';
 import { database } from '../lib/firebase';
@@ -16,19 +16,6 @@ import {
   summarizeStudentAssessment,
   type AssessmentStudent,
 } from '../lib/studentAssessment';
-import { exportSystemWorkbook } from '../lib/systemExcelExport';
-
-interface ScoreRecord {
-  id: string;
-  round: string;
-  boulder: number;
-  at: number | null;
-  az: number | null;
-  attemptCount?: number;
-  timestamp?: number;
-  version?: number;
-  key?: string;
-}
 
 export default function AssessmentResults() {
   const navigate = useNavigate();
@@ -41,7 +28,6 @@ export default function AssessmentResults() {
   const [studentError, setStudentError] = useState('');
   const [search, setSearch] = useState('');
   const [selectedStudent, setSelectedStudent] = useState<AssessmentStudent | null>(null);
-  const [scores, setScores] = useState<ScoreRecord[]>([]);
   const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set());
   const [adminBusy, setAdminBusy] = useState(false);
   const [adminMessage, setAdminMessage] = useState('');
@@ -60,14 +46,6 @@ export default function AssessmentResults() {
     setStudentsLoading(false);
     setStudentError(`${error.message} (${error.code || 'STUDENT_READ_FAILED'})`);
   }), []);
-
-  useEffect(() => onValue(ref(database, 'scores'), (snapshot) => {
-    const data = snapshot.val() || {};
-    setScores(Object.entries(data).map(([key, value]) => ({
-      ...(value as Omit<ScoreRecord, 'key'>),
-      key,
-    })));
-  }, (error) => setAdminError(`${error.message} (${error.code || 'SCORE_READ_FAILED'})`)), []);
 
   const results = useMemo(() => students.map((student) => ({
     student,
@@ -133,17 +111,6 @@ export default function AssessmentResults() {
     } finally { setAdminBusy(false); }
   };
 
-  const exportExcel = async () => {
-    if (!isAdministrator) return;
-    setAdminBusy(true); setAdminError(''); setAdminMessage('');
-    try {
-      await exportSystemWorkbook({ students, scores, assessments, rounds });
-      setAdminMessage('Excel report exported successfully.');
-    } catch (error) {
-      setAdminError(error instanceof Error ? error.message : 'Excel report could not be created.');
-    } finally { setAdminBusy(false); }
-  };
-
   const openDetail = (student: AssessmentStudent) => {
     if (!student.key) return;
     navigate(`/assessment-results/${student.key}`);
@@ -168,7 +135,6 @@ export default function AssessmentResults() {
                 </div>
               </div>
               <div className="flex flex-col gap-2 sm:flex-row">
-                {isAdministrator && <button type="button" disabled={adminBusy} onClick={() => void exportExcel()} className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"><FileSpreadsheet className="h-5 w-5" />Export Complete Excel</button>}
                 {(isAdministrator || currentUser?.role === 'coach') && <Link to="/student-assessment" className="flex min-h-11 items-center justify-center rounded-lg bg-cyan-600 px-4 font-semibold text-white hover:bg-cyan-700">Enter Student Assessment</Link>}
               </div>
             </div>

@@ -3,7 +3,7 @@ import { BackButton } from '../components/BackButton';
 import { getCurrentUser, type UserRole } from '../lib/auth';
 import { database } from '../lib/firebase';
 import { ref, get, set, update } from 'firebase/database';
-import { Settings as SettingsIcon, UserPlus, Trash2, Save, ListChecks, Plus, ArrowUp, ArrowDown, GraduationCap, ClipboardCheck, Hash, AlertTriangle } from 'lucide-react';
+import { Settings as SettingsIcon, UserPlus, Trash2, Save, ListChecks, Plus, ArrowUp, ArrowDown, GraduationCap, ClipboardCheck, Hash, AlertTriangle, FileSpreadsheet, Trophy } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { DEFAULT_ROUNDS, normalizeRounds } from '../lib/rounds';
 import { AssessmentArchives } from '../components/AssessmentArchives';
@@ -32,12 +32,25 @@ import {
   type BibSettings,
   type BibStudent,
 } from '../lib/bib';
+import { exportSystemWorkbook } from '../lib/systemExcelExport';
+import type { AssessmentStudent, StudentAssessmentRecord } from '../lib/studentAssessment';
 
 interface ManagedUser {
   username: string;
   role: UserRole;
   createdAt: string;
   key: string;
+}
+
+interface ExportScoreRecord {
+  id: string;
+  round: string;
+  boulder: number;
+  at: number | null;
+  az: number | null;
+  attemptCount?: number;
+  timestamp?: number;
+  version?: number;
 }
 
 export default function Settings() {
@@ -65,6 +78,13 @@ export default function Settings() {
   const [roundSuccess, setRoundSuccess] = useState('');
   const [numberingMode, setNumberingMode] = useState<BoulderNumberingMode>('continuous');
   const [boulderCounts, setBoulderCounts] = useState<Record<string, number>>({});
+  const [showAllStudentsInRanking, setShowAllStudentsInRanking] = useState(false);
+  const [rankingDisplayError, setRankingDisplayError] = useState('');
+  const [rankingDisplaySuccess, setRankingDisplaySuccess] = useState('');
+  const [rankingDisplaySaving, setRankingDisplaySaving] = useState(false);
+  const [exportBusy, setExportBusy] = useState(false);
+  const [exportError, setExportError] = useState('');
+  const [exportSuccess, setExportSuccess] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [dataError, setDataError] = useState('');
   const [assessmentResultFields, setAssessmentResultFields] = useState<AssessmentResultFields>(DEFAULT_ASSESSMENT_RESULT_FIELDS);
@@ -134,6 +154,7 @@ export default function Settings() {
     setRoundOrigins(loadedRounds);
     setNumberingMode(competition.numberingMode === 'per-round' ? 'per-round' : 'continuous');
     setBoulderCounts(competition.boulderCounts || {});
+    setShowAllStudentsInRanking(competition.showAllStudentsInRanking === true);
     setAssessmentResultFields(
       assessmentSnapshot.exists()
         ? normalizeAssessmentResultFields(assessmentSnapshot.val())
@@ -245,6 +266,7 @@ export default function Settings() {
             const range = getBoulderRange(cleanedRounds, name, {
               numberingMode,
               boulderCounts: nextCounts,
+              showAllStudentsInRanking,
             });
             if (Number.isInteger(previousValue) && previousValue >= range.start && previousValue <= range.end) {
               nextRounds[name] = previousValue;
@@ -283,6 +305,55 @@ export default function Settings() {
     } catch (error) {
       const details = describeError(error, 'Assessment result display could not be saved');
       setAssessmentDisplayError(`${details.message} — ${details.code} — ${details.time}`);
+    }
+  };
+
+  const handleSaveRankingDisplay = async () => {
+    setRankingDisplaySaving(true);
+    setRankingDisplayError('');
+    setRankingDisplaySuccess('');
+    try {
+      await set(ref(database, 'settings/competition/showAllStudentsInRanking'), showAllStudentsInRanking);
+      setRankingDisplaySuccess(showAllStudentsInRanking
+        ? 'Ranking will show all registered students.'
+        : 'Ranking will show only students with recorded scores.');
+    } catch (error) {
+      const details = describeError(error, 'Ranking display setting could not be saved');
+      setRankingDisplayError(`${details.message} — ${details.code} — ${details.time}`);
+    } finally {
+      setRankingDisplaySaving(false);
+    }
+  };
+
+  const handleExportExcel = async () => {
+    setExportBusy(true);
+    setExportError('');
+    setExportSuccess('');
+    try {
+      const [studentsSnapshot, scoresSnapshot, assessmentsSnapshot, roundsSnapshot] = await Promise.all([
+        get(ref(database, 'students')),
+        get(ref(database, 'scores')),
+        get(ref(database, 'studentAssessments')),
+        get(ref(database, 'settings/rounds')),
+      ]);
+      const students = studentsSnapshot.exists()
+        ? Object.entries(studentsSnapshot.val() as Record<string, Omit<AssessmentStudent, 'key'>>)
+          .map(([key, student]) => ({ ...student, key }))
+        : [];
+      const scores = scoresSnapshot.exists()
+        ? Object.values(scoresSnapshot.val() as Record<string, ExportScoreRecord>)
+        : [];
+      const assessments = assessmentsSnapshot.exists()
+        ? Object.values(assessmentsSnapshot.val() as Record<string, StudentAssessmentRecord>)
+        : [];
+      const exportRounds = roundsSnapshot.exists() ? normalizeRounds(roundsSnapshot.val()) : DEFAULT_ROUNDS;
+      await exportSystemWorkbook({ students, scores, assessments, rounds: exportRounds });
+      setExportSuccess('Excel report exported successfully.');
+    } catch (error) {
+      const details = describeError(error, 'Excel report could not be created');
+      setExportError(`${details.message} — ${details.code} — ${details.time}`);
+    } finally {
+      setExportBusy(false);
     }
   };
 
@@ -693,6 +764,45 @@ export default function Settings() {
 
           <section className="order-3 border-b border-slate-200 pb-6 mb-6">
             <div className="mb-2 flex items-center gap-2">
+              <Trophy className="h-5 w-5 text-amber-600" />
+              <h3 className="text-xl font-bold text-slate-900">Ranking &amp; Excel Export</h3>
+            </div>
+            <p className="mb-4 text-sm text-slate-600">Control which students appear in both ranking views and download the complete system report.</p>
+
+            <label className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <input
+                type="checkbox"
+                checked={showAllStudentsInRanking}
+                onChange={(event) => {
+                  setShowAllStudentsInRanking(event.target.checked);
+                  setRankingDisplayError('');
+                  setRankingDisplaySuccess('');
+                }}
+                className="mt-1 h-5 w-5"
+              />
+              <span>
+                <strong className="block text-slate-900">Show all registered students in ranking</strong>
+                <span className="mt-1 block text-sm text-slate-600">When enabled, students without a recorded score appear with 0.0 points. When disabled, only students with recorded scores appear.</span>
+              </span>
+            </label>
+
+            {rankingDisplayError && <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{rankingDisplayError}</div>}
+            {rankingDisplaySuccess && <div className="mt-3 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700">{rankingDisplaySuccess}</div>}
+
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+              <button type="button" disabled={rankingDisplaySaving} onClick={() => void handleSaveRankingDisplay()} className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-amber-600 px-6 font-semibold text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50">
+                <Save className="h-5 w-5" /> {rankingDisplaySaving ? 'Saving…' : 'Save Ranking Display'}
+              </button>
+              <button type="button" disabled={exportBusy} onClick={() => void handleExportExcel()} className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-6 font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">
+                <FileSpreadsheet className="h-5 w-5" /> {exportBusy ? 'Preparing Excel…' : 'Export Complete Excel'}
+              </button>
+            </div>
+            {exportError && <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{exportError}</div>}
+            {exportSuccess && <div className="mt-3 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700">{exportSuccess}</div>}
+          </section>
+
+          <section className="order-4 border-b border-slate-200 pb-6 mb-6">
+            <div className="mb-2 flex items-center gap-2">
               <GraduationCap className="h-5 w-5 text-cyan-700" />
               <h3 className="text-xl font-bold text-slate-900">Student Assessment Result Display</h3>
             </div>
@@ -714,11 +824,11 @@ export default function Settings() {
             <button type="button" onClick={() => void handleSaveAssessmentDisplay()} className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-cyan-600 px-6 font-semibold text-white hover:bg-cyan-700 sm:w-auto"><Save className="h-5 w-5" /> Save Assessment Display</button>
           </section>
 
-          <div className="order-4"><AssessmentArchives username={currentUser.username} /></div>
+          <div className="order-5"><AssessmentArchives username={currentUser.username} /></div>
 
-          <div className="order-5"><AccountPasswordSection currentUser={currentUser} /></div>
+          <div className="order-6"><AccountPasswordSection currentUser={currentUser} /></div>
 
-          <div className="order-6"><AdminPasswordResetSection users={users} currentUsername={currentUser.username} /></div>
+          <div className="order-7"><AdminPasswordResetSection users={users} currentUsername={currentUser.username} /></div>
 
           {/* Round Management Section */}
           <div id="manage-rounds" className="order-1 border-b border-slate-200 pb-6 mb-6">
