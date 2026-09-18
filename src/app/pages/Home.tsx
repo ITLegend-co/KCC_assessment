@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { UserPlus, ClipboardCheck, Trophy, LogOut, Settings, QrCode, GraduationCap, Download, X } from 'lucide-react';
+import { UserPlus, ClipboardCheck, Trophy, LogOut, Settings, QrCode, GraduationCap, Download, X, Globe2, Smartphone, Share2 } from 'lucide-react';
 import { getCurrentUser, logout } from '../lib/auth';
 import { canManageBoulderAssignments, useBoulderAssignmentSettings } from '../lib/boulderAssignments';
 
@@ -14,6 +14,7 @@ export default function Home() {
   const [currentUser] = useState(() => getCurrentUser());
   const isAndroidApk = navigator.userAgent.includes('KCCAssessmentAndroid/');
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [showInstallOptions, setShowInstallOptions] = useState(false);
   const [showInstallHelp, setShowInstallHelp] = useState(false);
   const [isInstalled, setIsInstalled] = useState(
     () => window.matchMedia('(display-mode: standalone)').matches
@@ -35,6 +36,7 @@ export default function Home() {
     const handleInstalled = () => {
       setInstallPrompt(null);
       setShowInstallHelp(false);
+      setShowInstallOptions(false);
       setIsInstalled(true);
     };
 
@@ -51,18 +53,21 @@ export default function Home() {
     navigate('/login');
   };
 
-  const handleInstall = async () => {
+  const handleBrowserInstall = async () => {
     if (installPrompt) {
       await installPrompt.prompt();
       const choice = await installPrompt.userChoice;
       if (choice.outcome === 'accepted') {
         setInstallPrompt(null);
+        setShowInstallOptions(false);
       }
       return;
     }
 
     setShowInstallHelp(true);
   };
+
+  const apkDownloadUrl = `${import.meta.env.BASE_URL}downloads/KCC_Assessment_Test_v1.apk`;
 
   if (!currentUser) {
     return null;
@@ -177,33 +182,15 @@ export default function Home() {
 
           {!isAndroidApk && <button
             type="button"
-            onClick={handleInstall}
-            disabled={isInstalled}
-            className="flex w-full items-center justify-center gap-3 rounded-xl bg-indigo-600 p-4 font-semibold text-white shadow-lg transition-all hover:scale-[1.02] hover:bg-indigo-700 hover:shadow-xl active:scale-[0.98] disabled:cursor-default disabled:bg-emerald-600 disabled:hover:scale-100"
+            onClick={() => {
+              setShowInstallOptions(true);
+              setShowInstallHelp(false);
+            }}
+            className="flex w-full items-center justify-center gap-3 rounded-xl bg-indigo-600 p-4 font-semibold text-white shadow-lg transition-all hover:scale-[1.02] hover:bg-indigo-700 hover:shadow-xl active:scale-[0.98]"
           >
             <Download className="h-5 w-5" />
-            {isInstalled ? 'Installed on This Device' : 'Install on Mobile'}
+            Install on Mobile
           </button>}
-
-          {!isAndroidApk && showInstallHelp && !isInstalled && (
-            <div className="relative rounded-xl border border-indigo-200 bg-indigo-50 p-4 pr-10 text-left text-sm text-indigo-950">
-              <button
-                type="button"
-                onClick={() => setShowInstallHelp(false)}
-                aria-label="Close installation instructions"
-                className="absolute right-3 top-3 text-indigo-500 hover:text-indigo-800"
-              >
-                <X className="h-4 w-4" />
-              </button>
-              <strong className="mb-1 block">Install this app</strong>
-              <span className="block md:hidden">
-                On iPhone/iPad, open Safari, tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>. On Android, open the browser menu and select <strong>Install app</strong> or <strong>Add to Home screen</strong>.
-              </span>
-              <span className="hidden md:block">
-                Open your browser menu and select <strong>Install app</strong>. You can also open this page on your mobile device and use this button there.
-              </span>
-            </div>
-          )}
 
           <div className="pt-4 border-t border-slate-200 space-y-3">
             <Link
@@ -229,6 +216,55 @@ export default function Home() {
         </div>
 
       </div>
+
+      {!isAndroidApk && showInstallOptions && (
+        <div role="dialog" aria-modal="true" aria-labelledby="mobile-install-title" className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4" onClick={() => setShowInstallOptions(false)}>
+          <div className="relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl sm:p-6" onClick={(event) => event.stopPropagation()}>
+            <button type="button" onClick={() => setShowInstallOptions(false)} aria-label="Close mobile installation options" className="absolute right-3 top-3 flex h-11 w-11 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900">
+              <X className="h-5 w-5" />
+            </button>
+
+            <div className="pr-12">
+              <h2 id="mobile-install-title" className="text-2xl font-bold text-slate-900">Install on Mobile</h2>
+              <p className="mt-1 text-sm text-slate-600">Choose the installation method for your device.</p>
+            </div>
+
+            <div className="mt-5 space-y-3">
+              <button type="button" onClick={() => void handleBrowserInstall()} className="flex min-h-20 w-full items-center gap-4 rounded-xl border-2 border-indigo-200 bg-indigo-50 p-4 text-left hover:border-indigo-400 hover:bg-indigo-100">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white"><Globe2 className="h-6 w-6" /></span>
+                <span>
+                  <strong className="block text-indigo-950">Install Using Browser</strong>
+                  <span className="mt-1 block text-sm text-indigo-800">Android, iPhone and iPad. Opens like an app from the home screen.</span>
+                  {isInstalled && <span className="mt-1 block text-xs font-semibold text-emerald-700">Already installed on this device</span>}
+                </span>
+              </button>
+
+              {showInstallHelp && !isInstalled && (
+                <div className="rounded-xl border border-indigo-200 bg-white p-4 text-sm text-slate-700">
+                  <div className="flex gap-3">
+                    <Share2 className="mt-0.5 h-5 w-5 shrink-0 text-indigo-600" />
+                    <div>
+                      <strong className="block text-slate-900">Manual browser installation</strong>
+                      <p className="mt-1"><strong>iPhone/iPad:</strong> Open this website in Safari, tap Share, then <strong>Add to Home Screen</strong>.</p>
+                      <p className="mt-2"><strong>Android:</strong> Open the browser menu, then select <strong>Install app</strong> or <strong>Add to Home screen</strong>.</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <a href={apkDownloadUrl} download="KCC_Assessment_Test_v1.apk" className="flex min-h-20 w-full items-center gap-4 rounded-xl border-2 border-emerald-200 bg-emerald-50 p-4 text-left hover:border-emerald-400 hover:bg-emerald-100">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white"><Smartphone className="h-6 w-6" /></span>
+                <span>
+                  <strong className="block text-emerald-950">Download Android APK</strong>
+                  <span className="mt-1 block text-sm text-emerald-800">Direct Android application. Android may ask permission to install from this source.</span>
+                </span>
+              </a>
+            </div>
+
+            <p className="mt-4 rounded-xl bg-amber-50 p-3 text-xs leading-5 text-amber-900"><strong>iPhone/iPad:</strong> APK files only work on Android. Use the browser installation option on iOS. A native iOS version would require Apple signing and distribution through TestFlight or the App Store.</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
