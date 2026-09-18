@@ -12,6 +12,7 @@ interface BeforeInstallPromptEvent extends Event {
 export default function Home() {
   const navigate = useNavigate();
   const [currentUser] = useState(() => getCurrentUser());
+  const isAndroidApk = navigator.userAgent.includes('KCCAssessmentAndroid/');
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showInstallHelp, setShowInstallHelp] = useState(false);
   const [isInstalled, setIsInstalled] = useState(
@@ -174,7 +175,7 @@ export default function Home() {
             </Link>
           )}
 
-          <button
+          {!isAndroidApk && <button
             type="button"
             onClick={handleInstall}
             disabled={isInstalled}
@@ -182,9 +183,9 @@ export default function Home() {
           >
             <Download className="h-5 w-5" />
             {isInstalled ? 'Installed on This Device' : 'Install on Mobile'}
-          </button>
+          </button>}
 
-          {showInstallHelp && !isInstalled && (
+          {!isAndroidApk && showInstallHelp && !isInstalled && (
             <div className="relative rounded-xl border border-indigo-200 bg-indigo-50 p-4 pr-10 text-left text-sm text-indigo-950">
               <button
                 type="button"

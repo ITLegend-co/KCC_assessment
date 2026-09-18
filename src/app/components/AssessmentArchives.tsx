@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Archive, Download, Eye, PlayCircle, RotateCcw, Save, X } from 'lucide-react';
+import { Archive, Download, Eye, PlayCircle, RotateCcw, Save, Trash2, X } from 'lucide-react';
 import { database } from '../lib/firebase';
-import { get, onValue, push, ref, set, update } from 'firebase/database';
+import { get, onValue, push, ref, remove, set, update } from 'firebase/database';
 import { describeError } from '../lib/appError';
 
 interface ArchiveRecord {
@@ -91,13 +91,42 @@ export function AssessmentArchives({ username }: { username: string }) {
     URL.revokeObjectURL(link.href);
   };
 
+  const deleteArchive = async (archive: ArchiveRecord) => {
+    if (!window.confirm(`Permanently delete the saved assessment “${archive.name}”? This cannot be undone.`)) return;
+    setBusy(true); setError(''); setMessage('');
+    try {
+      await remove(ref(database, `assessmentArchives/${archive.key}`));
+      if (selected?.key === archive.key) setSelected(null);
+      setMessage(`“${archive.name}” was deleted.`);
+    } catch (reason) {
+      const details = describeError(reason, 'Saved assessment could not be deleted');
+      setError(`${details.message} — ${details.code}`);
+    } finally { setBusy(false); }
+  };
+
+  const deleteAllArchives = async () => {
+    if (!archives.length) return;
+    if (!window.confirm(`Permanently delete all ${archives.length} saved assessment files? This cannot be undone.`)) return;
+    setBusy(true); setError(''); setMessage('');
+    try {
+      await remove(ref(database, 'assessmentArchives'));
+      setSelected(null);
+      setMessage('All saved assessment files were deleted.');
+    } catch (reason) {
+      const details = describeError(reason, 'Saved assessments could not be deleted');
+      setError(`${details.message} — ${details.code}`);
+    } finally { setBusy(false); }
+  };
+
   return <section className="border-b border-slate-200 pb-6 mb-6">
     <div className="mb-2 flex items-center gap-2"><Archive className="h-5 w-5" /><h3 className="text-xl font-bold">Assessment Save Files</h3></div>
     <p className="mb-4 text-sm text-slate-600">Save the current students, competition scores, coach assessments, rounds, and boulder settings before starting another event.</p>
     <div className="flex flex-col gap-2 sm:flex-row"><input value={name} onChange={(e) => setName(e.target.value)} placeholder="Example: KCC Assessment September 2026" className="min-h-11 min-w-0 flex-1 rounded-lg border px-4" /><button disabled={busy} onClick={saveArchive} className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 font-semibold text-white disabled:opacity-50"><Save className="h-5 w-5" />Save Current Assessment</button></div>
     {message && <p role="status" className="mt-3 rounded-lg bg-green-50 p-3 text-sm text-green-800">{message}</p>}
     {error && <p role="alert" className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p>}
-    <div className="mt-5 space-y-3">{archives.map((archive) => <article key={archive.key} className="rounded-lg border p-4"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-bold">{archive.name}</p><p className="text-sm text-slate-500">{new Date(archive.createdAt).toLocaleString()} · {Object.keys(archive.students || {}).length} students · {Object.keys(archive.scores || {}).length} score records · {Object.keys(archive.studentAssessments || {}).length} coach assessments</p></div><div className="grid grid-cols-3 gap-2"><button aria-label={`View ${archive.name}`} onClick={() => setSelected(archive)} className="flex min-h-11 items-center justify-center rounded-lg bg-blue-100 text-blue-700"><Eye className="h-5 w-5" /></button><button aria-label={`Download ${archive.name}`} onClick={() => downloadArchive(archive)} className="flex min-h-11 items-center justify-center rounded-lg bg-violet-100 text-violet-700"><Download className="h-5 w-5" /></button><button aria-label={`Restore ${archive.name}`} onClick={() => restoreArchive(archive)} className="flex min-h-11 items-center justify-center rounded-lg bg-amber-100 text-amber-700"><RotateCcw className="h-5 w-5" /></button></div></div></article>)}</div>
+    <div className="mt-5 space-y-3">{archives.map((archive) => <article key={archive.key} className="rounded-lg border p-4"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-bold">{archive.name}</p><p className="text-sm text-slate-500">{new Date(archive.createdAt).toLocaleString()} · {Object.keys(archive.students || {}).length} students · {Object.keys(archive.scores || {}).length} score records · {Object.keys(archive.studentAssessments || {}).length} coach assessments</p></div><div className="grid grid-cols-4 gap-2"><button disabled={busy} aria-label={`View ${archive.name}`} onClick={() => setSelected(archive)} className="flex min-h-11 items-center justify-center rounded-lg bg-blue-100 text-blue-700 disabled:opacity-50"><Eye className="h-5 w-5" /></button><button disabled={busy} aria-label={`Download ${archive.name}`} onClick={() => downloadArchive(archive)} className="flex min-h-11 items-center justify-center rounded-lg bg-violet-100 text-violet-700 disabled:opacity-50"><Download className="h-5 w-5" /></button><button disabled={busy} aria-label={`Restore ${archive.name}`} onClick={() => restoreArchive(archive)} className="flex min-h-11 items-center justify-center rounded-lg bg-amber-100 text-amber-700 disabled:opacity-50"><RotateCcw className="h-5 w-5" /></button><button disabled={busy} aria-label={`Delete ${archive.name}`} onClick={() => void deleteArchive(archive)} className="flex min-h-11 items-center justify-center rounded-lg bg-red-100 text-red-700 disabled:opacity-50"><Trash2 className="h-5 w-5" /></button></div></div></article>)}</div>
+    {!archives.length && <p className="mt-5 rounded-lg bg-slate-50 p-4 text-center text-sm text-slate-500">No saved assessment files.</p>}
+    {archives.length > 0 && <button disabled={busy} onClick={() => void deleteAllArchives()} className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-red-300 bg-red-50 px-4 font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50"><Trash2 className="h-5 w-5" />Delete All Saved Assessment Files</button>}
     <button disabled={busy} onClick={startNew} className="mt-5 flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-red-700 px-4 font-semibold text-white disabled:opacity-50"><PlayCircle className="h-5 w-5" />Start New Assessment</button>
     {selected && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="archive-title" onClick={() => setSelected(null)}><div className="max-h-[85dvh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-5" onClick={(e) => e.stopPropagation()}><div className="flex justify-between gap-3"><h3 id="archive-title" className="text-xl font-bold">{selected.name}</h3><button aria-label="Close archive details" onClick={() => setSelected(null)} className="flex h-11 w-11 items-center justify-center rounded-lg hover:bg-slate-100"><X /></button></div><dl className="mt-4 grid grid-cols-2 gap-3 rounded-lg bg-slate-50 p-4 text-sm"><div><dt className="font-semibold">Saved</dt><dd>{new Date(selected.createdAt).toLocaleString()}</dd></div><div><dt className="font-semibold">Saved by</dt><dd>{selected.createdBy}</dd></div><div><dt className="font-semibold">Students</dt><dd>{Object.keys(selected.students || {}).length}</dd></div><div><dt className="font-semibold">Score records</dt><dd>{Object.keys(selected.scores || {}).length}</dd></div><div><dt className="font-semibold">Coach assessments</dt><dd>{Object.keys(selected.studentAssessments || {}).length}</dd></div></dl><p className="mt-4 text-sm text-slate-600">Restore this save file to review its complete ranking, score history, and student assessment results in the normal system pages. You can save the current assessment first so it can be restored afterward.</p></div></div>}
   </section>;
