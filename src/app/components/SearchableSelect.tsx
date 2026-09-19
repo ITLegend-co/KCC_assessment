@@ -74,7 +74,7 @@ export function SearchableSelect({
         onKeyDown={handleKeyDown}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
-        className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-white text-left flex items-center justify-between"
+        className="kcc-searchable-trigger w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-left flex items-center justify-between"
       >
         <span className={value ? 'text-slate-900' : 'text-slate-500'}>
           {selectedOption ? selectedOption.label : placeholder}
@@ -88,9 +88,9 @@ export function SearchableSelect({
 
       {/* Dropdown */}
       {isOpen && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-slate-300 rounded-lg shadow-lg max-h-80 flex flex-col">
+        <div className="kcc-searchable-dropdown absolute z-50 w-full mt-1 border border-slate-300 rounded-lg shadow-lg max-h-80 flex flex-col">
           {/* Search input */}
-          <div className="p-2 border-b border-slate-200">
+          <div className="kcc-searchable-search p-2 border-b border-slate-200">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
@@ -120,8 +120,8 @@ export function SearchableSelect({
                   onMouseEnter={() => setActiveIndex(index)}
                   role="option"
                   aria-selected={option.value === value}
-                  className={`w-full px-4 py-2 text-left hover:bg-emerald-50 transition-colors ${
-                    option.value === value || index === activeIndex ? 'bg-emerald-100 font-semibold' : ''
+                  className={`kcc-searchable-option w-full px-4 py-2 text-left transition-colors ${
+                    option.value === value || index === activeIndex ? 'is-active font-semibold' : ''
                   }`}
                 >
                   {option.label}

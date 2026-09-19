@@ -332,6 +332,30 @@ a:focus-visible {
 input[type="checkbox"],
 input[type="radio"] { accent-color: var(--kcc-yellow); }
 
+.kcc-searchable-trigger,
+.kcc-searchable-dropdown,
+.kcc-searchable-search {
+  border-color: var(--kcc-line) !important;
+  background: var(--kcc-input) !important;
+  color: var(--kcc-text) !important;
+}
+
+.kcc-searchable-trigger {
+  min-height: 3rem;
+  box-shadow: inset 0 2px 7px rgba(0, 0, 0, 0.25);
+}
+
+.kcc-searchable-option {
+  background: var(--kcc-input) !important;
+  color: var(--kcc-text) !important;
+}
+
+.kcc-searchable-option:hover,
+.kcc-searchable-option.is-active {
+  background: color-mix(in srgb, var(--kcc-yellow) 22%, var(--kcc-input)) !important;
+  color: var(--kcc-text) !important;
+}
+
 :is(button, a).bg-blue-600,
 :is(button, a).bg-cyan-600,
 :is(button, a).bg-violet-600,
