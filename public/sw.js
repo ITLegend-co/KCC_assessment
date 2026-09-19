@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kcc-assessment-v2';
+const CACHE_NAME = 'kcc-assessment-v3';
 const APP_SHELL = [
   '/KCC_assessment/',
   '/KCC_assessment/index.html',
