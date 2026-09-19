@@ -42,6 +42,7 @@ interface RankingEntry {
 }
 
 type GenderFilter = 'both' | 'male' | 'female';
+const OVERALL_ROUND = '__overall__';
 
 interface RankingBoardProps {
   showCopyLink?: boolean;
@@ -52,7 +53,7 @@ export function RankingBoard({ showCopyLink = false, showAssessmentResults = fal
   const navigate = useNavigate();
   const [students, setStudents] = useState<Student[]>([]);
   const [scores, setScores] = useState<Score[]>([]);
-  const [selectedRound, setSelectedRound] = useState('Qualifier');
+  const [selectedRound, setSelectedRound] = useState(OVERALL_ROUND);
   const [genderFilter, setGenderFilter] = useState<GenderFilter>('both');
   const [searchQuery, setSearchQuery] = useState('');
   const [ranking, setRanking] = useState<RankingEntry[]>([]);
@@ -67,7 +68,7 @@ export function RankingBoard({ showCopyLink = false, showAssessmentResults = fal
   const rankingOnlyUrl = `${window.location.origin}${window.location.pathname}#/ranking-only`;
 
   useEffect(() => {
-    if (!rounds.includes(selectedRound)) {
+    if (selectedRound !== OVERALL_ROUND && !rounds.includes(selectedRound)) {
       setSelectedRound(rounds[0]);
     }
   }, [rounds, selectedRound]);
@@ -115,7 +116,7 @@ export function RankingBoard({ showCopyLink = false, showAssessmentResults = fal
 
   useEffect(() => {
     calculateRanking();
-  }, [selectedRound, scores, students, genderFilter, competitionSettings.showAllStudentsInRanking]);
+  }, [selectedRound, scores, students, genderFilter, competitionSettings.showAllStudentsInRanking, rounds]);
 
   // Get only the latest version of each score
   const getLatestScores = (): Score[] => {
@@ -161,7 +162,7 @@ export function RankingBoard({ showCopyLink = false, showAssessmentResults = fal
     }
 
     getLatestScores()
-      .filter((s) => s.round === selectedRound)
+      .filter((s) => selectedRound === OVERALL_ROUND ? rounds.includes(s.round) : s.round === selectedRound)
       .forEach((s) => {
         if (!summary[s.id]) {
           const student = students.find((st) => st.id === s.id);
@@ -221,7 +222,7 @@ export function RankingBoard({ showCopyLink = false, showAssessmentResults = fal
     : femaleRanking;
 
   const getRankDisplay = (index: number, list: RankingEntry[]) => {
-    if (index === 0) return { rank: 1 };
+    if (index <= 0) return { rank: 1 };
 
     const current = list[index];
     const prev = list[index - 1];
@@ -229,11 +230,12 @@ export function RankingBoard({ showCopyLink = false, showAssessmentResults = fal
     if (
       current.points === prev.points
     ) {
-      // Same rank as previous
+      // Same points share the same position.
       return getRankDisplay(index - 1, list);
     }
 
-    return { rank: index + 1 };
+    // Dense ranking keeps the next position consecutive: 1, 2, 2, 3.
+    return { rank: getRankDisplay(index - 1, list).rank + 1 };
   };
   
   // Get the original rank from the full ranking list
@@ -290,7 +292,7 @@ export function RankingBoard({ showCopyLink = false, showAssessmentResults = fal
       return (
         <div className="text-center py-12 text-slate-500">
           <Trophy className="w-16 h-16 mx-auto mb-4 text-slate-300" />
-          <p className="text-lg">No results{title ? ` for ${title}` : ''} in this round yet</p>
+          <p className="text-lg">No results{title ? ` for ${title}` : ''} in {selectedRound === OVERALL_ROUND ? 'the overall ranking' : 'this round'} yet</p>
         </div>
       );
     }
@@ -315,7 +317,7 @@ export function RankingBoard({ showCopyLink = false, showAssessmentResults = fal
                 <th className="w-[4.5rem] px-2 sm:px-4 py-3 text-left text-sm sm:text-base font-bold text-slate-700">Rank</th>
                 <th className="w-[3.75rem] sm:w-[5.5rem] px-1 sm:px-4 py-3 text-left text-sm sm:text-base font-bold text-slate-700">BIB</th>
                 <th className="px-2 sm:px-4 py-3 text-left text-sm sm:text-base font-bold text-slate-700">Name</th>
-                <th className="w-[4.75rem] sm:w-[6.5rem] px-1 sm:px-4 py-3 text-center text-sm sm:text-base font-bold text-slate-700">Points</th>
+                <th className="w-[4.75rem] sm:w-[6.5rem] px-1 sm:px-4 py-3 text-center text-sm sm:text-base font-bold text-slate-700">{selectedRound === OVERALL_ROUND ? 'Total Points' : 'Points'}</th>
               </tr>
             </thead>
             <tbody>
@@ -429,7 +431,7 @@ export function RankingBoard({ showCopyLink = false, showAssessmentResults = fal
               {showAssessmentResults && <button type="button" onClick={() => navigate('/assessment-results')} className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-cyan-600 px-4 font-semibold text-white shadow-md hover:bg-cyan-700">
                 <GraduationCap className="h-5 w-5" /> Student Assessment Result
               </button>}
-              <label className="text-sm font-semibold text-slate-700">Round:</label>
+              <label className="text-sm font-semibold text-slate-700">Ranking:</label>
               <select
                 value={selectedRound}
                 onChange={(e) => setSelectedRound(e.target.value)}
@@ -438,6 +440,7 @@ export function RankingBoard({ showCopyLink = false, showAssessmentResults = fal
                 {rounds.map((roundName) => (
                   <option key={roundName} value={roundName}>{roundName}</option>
                 ))}
+                <option value={OVERALL_ROUND}>Overall</option>
               </select>
             </div>
           </div>
@@ -516,7 +519,7 @@ export function RankingBoard({ showCopyLink = false, showAssessmentResults = fal
         {ranking.length === 0 ? (
           <div className="text-center py-12 text-slate-500">
             <Trophy className="w-16 h-16 mx-auto mb-4 text-slate-300" />
-            <p className="text-lg">No results for this round yet</p>
+            <p className="text-lg">No results for {selectedRound === OVERALL_ROUND ? 'the overall ranking' : 'this round'} yet</p>
           </div>
         ) : genderFilter === 'both' ? (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -549,7 +552,11 @@ export function RankingBoard({ showCopyLink = false, showAssessmentResults = fal
           </div>
           <div className="flex items-center gap-2">
             <span className="font-semibold">Maximum:</span>
-            <span>{(getBoulderRange(rounds, selectedRound, competitionSettings).count * 25).toFixed(1)} for {getBoulderRange(rounds, selectedRound, competitionSettings).count} boulders</span>
+            {selectedRound === OVERALL_ROUND ? (
+              <span>{(rounds.reduce((total, roundName) => total + getBoulderRange(rounds, roundName, competitionSettings).count, 0) * 25).toFixed(1)} across {rounds.length} rounds</span>
+            ) : (
+              <span>{(getBoulderRange(rounds, selectedRound, competitionSettings).count * 25).toFixed(1)} for {getBoulderRange(rounds, selectedRound, competitionSettings).count} boulders</span>
+            )}
           </div>
         </div>
       </div>
